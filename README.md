@@ -43,10 +43,12 @@ ResQMesh/
     │   │           │   ├── NetworkGraph.java         # Adjacency list mesh network graph
     │   │           │   ├── RoutingStrategy.java      # Strategy interface for pathfinding
     │   │           │   └── ShortestPathStrategy.java # BFS shortest-hop route discovery
-    │   │           └── simulation/
-    │   │               ├── SimulationDemo.java       # Standalone console demonstration runner
-    │   │               ├── SimulationEngine.java     # Transmission, battery & lifecycle coordinator
-    │   │               └── SimulationResult.java     # Delivery outcome record
+    │   │           ├── simulation/
+    │   │           │   ├── SimulationDemo.java       # Standalone console demonstration runner
+    │   │           │   ├── SimulationEngine.java     # Transmission, battery & lifecycle coordinator
+    │   │           │   └── SimulationResult.java     # Delivery outcome record
+    │   │           └── ui/
+    │   │               └── NetworkTopologyPane.java  # Interactive visual network topology canvas & BFS route renderer
     │   └── resources/
     │       ├── .gitkeep                          # Preserves resource directory
     │       └── style.css                         # Dark command & control UI stylesheet
@@ -86,15 +88,23 @@ ResQMesh/
      - Live, scrollable timestamped activity log with event categories.
      - Top stats bar with total devices, active online devices, mesh links, and dispatched messages.
 
-3. **`src/main/resources/style.css`**:
-   - Modern dark-themed CSS stylesheet.
-   - Defines custom cards, table view styling, button hover/press states, form controls, and scrollbars.
+3. **`src/main/java/com/resqmesh/ui/NetworkTopologyPane.java`**:
+   - Interactive visual network topology graph canvas.
+   - Dynamically renders registered devices as interactive draggable nodes with icons, names, and battery indicators.
+   - Renders bidirectional communication links tracking node positions in real-time.
+   - Visually differentiates online nodes (`🟢 ONLINE` in cyan/emerald) vs offline nodes (`🔴 OFFLINE` in crimson/dimmed).
+   - Real-time BFS route illumination: highlights transmission paths with glowing links and sequence hop badges (`#1`, `#2`, etc.).
+   - Interactive Node Inspector HUD displaying live telemetry for any clicked node.
 
-4. **`src/main/java/com/resqmesh/Launcher.java`**:
+4. **`src/main/resources/style.css`**:
+   - Modern dark-themed CSS stylesheet.
+   - Defines custom cards, table view styling, button hover/press states, form controls, tab panes, and scrollbars.
+
+5. **`src/main/java/com/resqmesh/Launcher.java`**:
    - A companion entry class that calls `App.main(args)`.
    - Useful when executing directly from IDEs without module-path VM flags.
 
-5. **`.gitignore`**:
+6. **`.gitignore`**:
    - Keeps git tracking clean by ignoring Maven output directories (`target/`) and IDE metadata files (`.idea`, `.vscode`, etc.).
 
 ---

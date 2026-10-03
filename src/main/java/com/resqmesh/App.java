@@ -12,6 +12,7 @@ import com.resqmesh.routing.NetworkGraph;
 import com.resqmesh.routing.ShortestPathStrategy;
 import com.resqmesh.simulation.SimulationEngine;
 import com.resqmesh.simulation.SimulationResult;
+import com.resqmesh.ui.NetworkTopologyPane;
 
 import javafx.application.Application;
 import javafx.beans.property.SimpleStringProperty;
@@ -32,17 +33,22 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * ResQMesh – Offline Communication Simulator
- * Modern Emergency Command & Control Dashboard
- * Redesigned Layout: Sidebar Navigation + Main Dashboard + Network Status + Dispatch Deck
+ * ResQMesh – Emergency Communication Dashboard
+ * Step 8: Visual Network Topology Panel & Route Highlighting.
+ * 
+ * Features:
+ * - Interactive visual network topology canvas with draggable nodes and dynamic links.
+ * - Tabbed navigation between Visual Mesh Topology and Device Telemetry Table.
+ * - Real-time BFS transmission path illumination.
+ * - Live Node Inspector and synchronization across all controls.
  */
 public class App extends Application {
 
     private static final String APP_TITLE = "ResQMesh – Emergency Communication Dashboard";
-    private static final int DEFAULT_WIDTH = 1320;
-    private static final int DEFAULT_HEIGHT = 860;
+    private static final int DEFAULT_WIDTH = 1340;
+    private static final int DEFAULT_HEIGHT = 880;
 
-    // Backend Core
+    // Backend Simulation Core
     private NetworkGraph graph;
     private SimulationEngine engine;
 
@@ -59,7 +65,9 @@ public class App extends Application {
     private Label kpiMeshLinksLabel;
     private Label kpiSuccessRateLabel;
 
-    // Central Network Table & Node Controls
+    // Central Network Panels & Visualization
+    private TabPane networkTabPane;
+    private NetworkTopologyPane topologyPane;
     private TableView<CommunicationDevice> deviceTable;
     private ComboBox<CommunicationDevice> selectedDeviceComboBox;
     private Button dynamicToggleBtn;
@@ -90,7 +98,7 @@ public class App extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        // Initialize Core Graph & BFS Simulation Engine
+        // Initialize Backend
         graph = new NetworkGraph();
         engine = new SimulationEngine(graph, new ShortestPathStrategy());
         deviceObservableList = FXCollections.observableArrayList();
@@ -120,7 +128,7 @@ public class App extends Application {
 
         HBox.setHgrow(networkStatusPanel, javafx.scene.layout.Priority.ALWAYS);
         HBox.setHgrow(dispatchAndLogsPanel, javafx.scene.layout.Priority.ALWAYS);
-        networkStatusPanel.setPrefWidth(720);
+        networkStatusPanel.setPrefWidth(740);
         dispatchAndLogsPanel.setPrefWidth(540);
 
         operationalDeck.getChildren().addAll(networkStatusPanel, dispatchAndLogsPanel);
@@ -140,11 +148,11 @@ public class App extends Application {
 
         primaryStage.setTitle(APP_TITLE);
         primaryStage.setScene(scene);
-        primaryStage.setMinWidth(1120);
-        primaryStage.setMinHeight(740);
+        primaryStage.setMinWidth(1140);
+        primaryStage.setMinHeight(760);
         primaryStage.show();
 
-        log("SYSTEM", "ResQMesh Emergency Command Dashboard loaded successfully.");
+        log("SYSTEM", "ResQMesh Emergency Command Dashboard with Visual Topology Canvas initialized.");
     }
 
     // --------------------------------------------------------------------------
@@ -175,12 +183,32 @@ public class App extends Application {
 
         // Navigation Items
         VBox navMenu = new VBox(6);
-        Button navDash = createNavButton("📊 Dashboard Overview", true);
-        Button navNodes = createNavButton("📡 Network Status", false);
+        Button navTopology = createNavButton("🗺️ Visual Topology", true);
+        Button navTable = createNavButton("📋 Node Telemetry", false);
         Button navDispatch = createNavButton("🚨 Emergency Dispatch", false);
         Button navLogs = createNavButton("📜 Terminal Logs", false);
 
-        navMenu.getChildren().addAll(navDash, navNodes, navDispatch, navLogs);
+        navTopology.setOnAction(e -> {
+            setActiveNav(navMenu, navTopology);
+            if (networkTabPane != null) networkTabPane.getSelectionModel().select(0);
+        });
+
+        navTable.setOnAction(e -> {
+            setActiveNav(navMenu, navTable);
+            if (networkTabPane != null) networkTabPane.getSelectionModel().select(1);
+        });
+
+        navDispatch.setOnAction(e -> {
+            setActiveNav(navMenu, navDispatch);
+            if (messageTextField != null) messageTextField.requestFocus();
+        });
+
+        navLogs.setOnAction(e -> {
+            setActiveNav(navMenu, navLogs);
+            if (activityFeedArea != null) activityFeedArea.requestFocus();
+        });
+
+        navMenu.getChildren().addAll(navTopology, navTable, navDispatch, navLogs);
 
         // Live Mesh Health Monitor Widget
         VBox healthWidget = new VBox(8);
@@ -231,7 +259,7 @@ public class App extends Application {
         VBox.setVgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
 
         // Sidebar Footer
-        Label footerNote = new Label("ResQMesh v1.0 • College Mini-Project\nJava 21 • JavaFX • In-Memory BFS");
+        Label footerNote = new Label("ResQMesh v1.0 • College Mini-Project\nInteractive Graph Visualization • BFS");
         footerNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #475569; -fx-line-spacing: 2px;");
 
         sidebar.getChildren().addAll(brandBox, navMenu, healthWidget, actionsBox, spacer, footerNote);
@@ -246,6 +274,15 @@ public class App extends Application {
             btn.getStyleClass().add("sidebar-nav-btn-active");
         }
         return btn;
+    }
+
+    private void setActiveNav(VBox navMenu, Button activeBtn) {
+        for (javafx.scene.Node node : navMenu.getChildren()) {
+            if (node instanceof Button b) {
+                b.getStyleClass().remove("sidebar-nav-btn-active");
+            }
+        }
+        activeBtn.getStyleClass().add("sidebar-nav-btn-active");
     }
 
     // --------------------------------------------------------------------------
@@ -298,19 +335,33 @@ public class App extends Application {
     }
 
     // --------------------------------------------------------------------------
-    // 3. Central Network Status Panel (Device Table & Link Management)
+    // 3. Central Network Status Panel (Interactive Topology Canvas + Table)
     // --------------------------------------------------------------------------
     private VBox createNetworkStatusPanel() {
         VBox col = new VBox(14);
 
-        // Section A: Active Nodes Table
-        VBox tableCard = createCard("Active Mesh Devices & Connection Status", "Live node telemetry and operational states");
-        VBox.setVgrow(tableCard, javafx.scene.layout.Priority.ALWAYS);
+        // Section A: Tabbed Network View (Interactive Topology Canvas vs Telemetry Table)
+        VBox viewCard = createCard("Network Status & Topology", "Interactive mesh graph, live connection lines, and telemetry");
+        VBox.setVgrow(viewCard, javafx.scene.layout.Priority.ALWAYS);
 
+        networkTabPane = new TabPane();
+        networkTabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        VBox.setVgrow(networkTabPane, javafx.scene.layout.Priority.ALWAYS);
+
+        // Tab 1: Interactive Visual Network Topology Canvas
+        topologyPane = new NetworkTopologyPane(graph);
+        topologyPane.setOnDeviceSelected(dev -> {
+            selectedDeviceComboBox.setValue(dev);
+            deviceTable.getSelectionModel().select(dev);
+            updateToggleState(dev);
+        });
+
+        Tab topologyTab = new Tab("🗺️ Interactive Mesh Topology", topologyPane);
+
+        // Tab 2: Active Nodes Table
         deviceTable = new TableView<>();
         deviceTable.setPlaceholder(new Label("No communication devices currently registered."));
-        deviceTable.setPrefHeight(270);
-        VBox.setVgrow(deviceTable, javafx.scene.layout.Priority.ALWAYS);
+        deviceTable.setPrefHeight(320);
 
         // Col 1: Name & ID
         TableColumn<CommunicationDevice, String> nameCol = new TableColumn<>("Device Name & ID");
@@ -403,10 +454,13 @@ public class App extends Application {
             if (newV != null) {
                 selectedDeviceComboBox.setValue(newV);
                 updateToggleState(newV);
+                topologyPane.selectDevice(newV);
             }
         });
 
-        tableCard.getChildren().add(deviceTable);
+        Tab tableTab = new Tab("📋 Device Telemetry Table", deviceTable);
+        networkTabPane.getTabs().addAll(topologyTab, tableTab);
+        viewCard.getChildren().add(networkTabPane);
 
         // Section B: Node Control Strip
         HBox controlStrip = new HBox(12);
@@ -417,7 +471,12 @@ public class App extends Application {
 
         selectedDeviceComboBox = createDeviceComboBox();
         selectedDeviceComboBox.setPrefWidth(220);
-        selectedDeviceComboBox.valueProperty().addListener((obs, oldV, newV) -> updateToggleState(newV));
+        selectedDeviceComboBox.valueProperty().addListener((obs, oldV, newV) -> {
+            updateToggleState(newV);
+            if (newV != null) {
+                topologyPane.selectDevice(newV);
+            }
+        });
 
         dynamicToggleBtn = new Button("Toggle Online / Offline");
         dynamicToggleBtn.getStyleClass().add("btn-rose");
@@ -428,7 +487,7 @@ public class App extends Application {
         rechargeBtn.setOnAction(e -> handleRecharge());
 
         controlStrip.getChildren().addAll(selectLbl, selectedDeviceComboBox, dynamicToggleBtn, rechargeBtn);
-        tableCard.getChildren().add(controlStrip);
+        viewCard.getChildren().add(controlStrip);
 
         // Section C: Grid for Provisioning & Linking
         HBox bottomGrid = new HBox(14);
@@ -486,7 +545,7 @@ public class App extends Application {
 
         bottomGrid.getChildren().addAll(addDeviceCard, connectCard);
 
-        col.getChildren().addAll(tableCard, bottomGrid);
+        col.getChildren().addAll(viewCard, bottomGrid);
         return col;
     }
 
@@ -688,7 +747,7 @@ public class App extends Application {
         // Call SimulationEngine
         SimulationResult result = engine.send(message);
 
-        // Update Visual Outcome
+        // Update Visual Outcome & Topology Graph Highlighting
         if (result.delivered()) {
             successfulDeliveries++;
             int hops = Math.max(0, result.route().size() - 1);
@@ -696,6 +755,7 @@ public class App extends Application {
             resultBadge.setStyle("-fx-background-color: #064e3b; -fx-text-fill: #34d399; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px; -fx-border-color: #059669; -fx-border-radius: 4px;");
 
             renderHopRoute(result.route());
+            topologyPane.highlightRoute(result.route());
             resultExplanationLabel.setText(result.explanation() + "\n⚡ Impact: -2.0% battery deducted from all nodes along the transmission path.");
 
             String routeStr = result.route().stream().map(CommunicationDevice::getName).collect(Collectors.joining(" -> "));
@@ -705,6 +765,7 @@ public class App extends Application {
             resultBadge.setStyle("-fx-background-color: #450a0a; -fx-text-fill: #f87171; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px; -fx-border-color: #dc2626; -fx-border-radius: 4px;");
 
             renderHopRoute(result.route());
+            topologyPane.highlightRoute(result.route());
             resultExplanationLabel.setText(result.explanation() + "\n💡 Diagnostic: Verify if intermediate nodes are offline, depleted of battery, or restricted from forwarding this priority.");
 
             log("FAILED", String.format("[%s] Delivery failed. Reason: %s", msgId, result.explanation()));
@@ -834,11 +895,17 @@ public class App extends Application {
         linkDeviceAComboBox.setValue(medical);
         linkDeviceBComboBox.setValue(charlie);
         updateToggleState(alice);
+        if (topologyPane != null) {
+            topologyPane.selectDevice(alice);
+        }
     }
 
     private void refreshUI() {
         deviceObservableList.setAll(graph.getAllDevices());
         deviceTable.refresh();
+        if (topologyPane != null) {
+            topologyPane.refresh();
+        }
 
         int totalDevices = graph.getDeviceCount();
         long activeDevices = graph.getAllDevices().stream().filter(CommunicationDevice::isAvailable).count();
