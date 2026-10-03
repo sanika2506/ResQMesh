@@ -47,7 +47,9 @@ ResQMesh/
     │   │               ├── SimulationDemo.java       # Standalone console demonstration runner
     │   │               ├── SimulationEngine.java     # Transmission, battery & lifecycle coordinator
     │   │               └── SimulationResult.java     # Delivery outcome record
-    │   └── resources/                        # Application resources (.gitkeep)
+    │   └── resources/
+    │       ├── .gitkeep                          # Preserves resource directory
+    │       └── style.css                         # Dark command & control UI stylesheet
     └── test/
         ├── java/
         │   └── com/
@@ -68,27 +70,31 @@ ResQMesh/
    The Project Object Model file for Maven. It defines:
    - Target Java release (`17` / compatible with Java 21).
    - JavaFX dependencies: `javafx-controls` and `javafx-fxml` (version `21.0.6`).
-   - `maven-compiler-plugin`: Ensures standardized compilation flags.
+   - `maven-compiler-plugin`: Ensures standardized compilation flags with `-Xlint:unchecked`.
    - `javafx-maven-plugin`: Configured with the main class `com.resqmesh.App` to enable running the application via `mvn javafx:run`.
 
 2. **`src/main/java/com/resqmesh/App.java`**:
    - The primary JavaFX GUI `Application` subclass for the simulator.
    - Connected directly to `SimulationEngine` and `NetworkGraph`.
    - Features:
-     - Real-time `TableView` displaying device names, types, battery %, status, and connected peers.
+     - Real-time `TableView` with custom styled status pills (`🟢 ONLINE`, `⚠️ LOW BATT`, `🔴 OFFLINE`), battery levels, and connected peers.
      - Controls to add virtual devices (`StudentPhone`, `SecurityStation`, `MedicalStation`).
      - Mesh link connection controls to connect two selected devices bidirectionally.
      - Device state toggles (Online/Offline) and 100% battery recharge.
-     - Emergency message dispatch form (Sender, Recipient, Priority, Payload).
-     - Simulation outcome card displaying real-time delivery status, multi-hop route path, and explanations.
-     - Live, scrollable timestamped activity log.
-     - Top stats bar with total devices, active online devices, and total mesh links.
+     - Emergency message dispatch form (Sender, Recipient, Priority, Payload, and one-click quick presets).
+     - Simulation outcome card displaying real-time delivery status, visual hop-by-hop breadcrumb route (`[ 📱 Alice ] ──▶ [ 📱 Bob ] ──▶ ...`), and explanations.
+     - Live, scrollable timestamped activity log with event categories.
+     - Top stats bar with total devices, active online devices, mesh links, and dispatched messages.
 
-3. **`src/main/java/com/resqmesh/Launcher.java`**:
+3. **`src/main/resources/style.css`**:
+   - Modern dark-themed CSS stylesheet.
+   - Defines custom cards, table view styling, button hover/press states, form controls, and scrollbars.
+
+4. **`src/main/java/com/resqmesh/Launcher.java`**:
    - A companion entry class that calls `App.main(args)`.
    - Useful when executing directly from IDEs without module-path VM flags.
 
-4. **`.gitignore`**:
+5. **`.gitignore`**:
    - Keeps git tracking clean by ignoring Maven output directories (`target/`) and IDE metadata files (`.idea`, `.vscode`, etc.).
 
 ---
