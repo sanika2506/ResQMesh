@@ -426,6 +426,7 @@ public class NetworkTopologyPane extends StackPane {
         VBox card = new VBox(4);
         card.setStyle("-fx-background-color: rgba(10, 16, 29, 0.90); -fx-background-radius: 8px; -fx-border-color: #1e3a5f; -fx-border-radius: 8px; -fx-padding: 10px 14px;");
         card.setMaxWidth(200);
+        card.setMouseTransparent(true);
 
         Label header = new Label("NODE INSPECTOR");
         header.setStyle("-fx-font-size: 9px; -fx-font-weight: 800; -fx-text-fill: #38bdf8; -fx-text-transform: uppercase;");
@@ -452,6 +453,7 @@ public class NetworkTopologyPane extends StackPane {
         HBox legend = new HBox(12);
         legend.setAlignment(Pos.CENTER_LEFT);
         legend.setStyle("-fx-background-color: rgba(10, 16, 29, 0.85); -fx-background-radius: 6px; -fx-border-color: #16243f; -fx-border-radius: 6px; -fx-padding: 5px 10px;");
+        legend.setMouseTransparent(true);
 
         Label legOnline = new Label("🟢 Online Node");
         legOnline.setStyle("-fx-font-size: 10px; -fx-text-fill: #34d399; -fx-font-weight: bold;");
@@ -515,9 +517,14 @@ public class NetworkTopologyPane extends StackPane {
             // Bottom Name Label
             nameLabel = new Label(device.getName());
             nameLabel.setStyle("-fx-text-fill: #f1f5f9; -fx-font-size: 11px; -fx-font-weight: 600; -fx-effect: dropshadow(one-pass-box, black, 4, 0, 0, 1);");
+            nameLabel.setMaxWidth(110);
+            nameLabel.setWrapText(true);
+            nameLabel.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
+            nameLabel.setAlignment(Pos.CENTER);
 
             VBox layout = new VBox(3, circleStack, nameLabel);
             layout.setAlignment(Pos.CENTER);
+            layout.setMaxWidth(110);
 
             getChildren().add(layout);
 
@@ -576,7 +583,7 @@ public class NetworkTopologyPane extends StackPane {
         public double getX() { return xProperty.get(); }
         public void setX(double x) {
             xProperty.set(x);
-            setLayoutX(x - 40);
+            setLayoutX(x - 55);
         }
         public DoubleProperty xProperty() { return xProperty; }
 

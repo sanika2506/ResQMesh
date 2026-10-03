@@ -134,7 +134,12 @@ public class App extends Application {
         operationalDeck.getChildren().addAll(networkStatusPanel, dispatchAndLogsPanel);
         centerArea.getChildren().add(operationalDeck);
 
-        root.setCenter(centerArea);
+        ScrollPane centerScrollPane = new ScrollPane(centerArea);
+        centerScrollPane.setFitToWidth(true);
+        centerScrollPane.setFitToHeight(true);
+        centerScrollPane.setStyle("-fx-background: #070b14; -fx-background-color: #070b14; -fx-border-color: transparent;");
+
+        root.setCenter(centerScrollPane);
 
         // Preload standard campus disaster relief network
         loadSampleNetwork();
@@ -650,7 +655,13 @@ public class App extends Application {
         resultRouteHBox.setAlignment(Pos.CENTER_LEFT);
         renderEmptyRoute();
 
-        routeSection.getChildren().addAll(routeHeader, resultRouteHBox);
+        ScrollPane routeScrollPane = new ScrollPane(resultRouteHBox);
+        routeScrollPane.setFitToHeight(true);
+        routeScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        routeScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        routeScrollPane.setStyle("-fx-background: transparent; -fx-background-color: transparent; -fx-border-color: transparent; -fx-padding: 2 0;");
+
+        routeSection.getChildren().addAll(routeHeader, routeScrollPane);
 
         resultExplanationLabel = new Label("Select sender, recipient, and priority, then click Dispatch to simulate mesh propagation.");
         resultExplanationLabel.setStyle("-fx-text-fill: #cbd5e1; -fx-font-size: 12px; -fx-line-spacing: 2px;");
