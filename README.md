@@ -3,10 +3,10 @@
 [![Java](https://img.shields.io/badge/Java-21%20LTS-orange.svg?logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![JavaFX](https://img.shields.io/badge/JavaFX-21.0.6-blue.svg?logo=java&logoColor=white)](https://openjfx.io/)
 [![Build Tool](https://img.shields.io/badge/Build-Maven%20Wrapper-red.svg?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
-[![Tests](https://img.shields.io/badge/JUnit%205-60%20Passed-brightgreen.svg?logo=junit5&logoColor=white)](https://junit.org/junit5/)
+[![Tests](https://img.shields.io/badge/JUnit%205-68%20Passed-brightgreen.svg?logo=junit5&logoColor=white)](https://junit.org/junit5/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-> **ResQMesh** is an offline peer-to-peer ad-hoc communication network simulator designed for disaster response scenarios where conventional cellular towers and internet backbones have failed. Built with modern Java, JavaFX, and clean Object-Oriented Architecture, it models multi-hop mesh message propagation, shortest-path BFS routing, battery drain telemetry, interactive visual network topology, full JSON configuration persistence, step-by-step emergency simulation replay with animated packet indicators, and comprehensive event timeline auditing.
+> **ResQMesh** is an offline peer-to-peer ad-hoc communication network simulator designed for disaster response scenarios where conventional cellular towers and internet backbones have failed. Built with modern Java, JavaFX, and clean Object-Oriented Architecture, it models multi-hop mesh message propagation, shortest-path BFS routing, battery drain telemetry, interactive visual network topology, full JSON configuration persistence, step-by-step emergency simulation replay with animated packet indicators, comprehensive event timeline auditing, and beginner-friendly interactive onboarding tutorials.
 
 ---
 
@@ -39,6 +39,14 @@
 ---
 
 ## 🌟 Core Features
+
+- **🧭 First-Time User Onboarding & Interactive Guidance (Step 12):**
+  - **Clean Welcome Modal:** First-time onboarding dialog providing an instant overview of ResQMesh with clear paths to start a blank simulation, load a pre-configured sample mesh, or take an interactive walkthrough.
+  - **Step-by-Step Interactive Tutorial:** Top-anchored interactive guide with real-time state tracking that coaches users through (1) provisioning devices, (2) establishing peer links, (3) dispatching emergency alerts, and (4) reviewing outcome diagnostics, with `Next`, `Previous`, `Restart`, and `Skip` controls.
+  - **Help & Quick Guide Workspace:** Dedicated 5th reference section explaining the 3-step disaster mesh workflow, device roles, forwarding permissions, transmission priority levels, and common failure troubleshooting.
+  - **Contextual Tooltips & Guidance:** Instructive tooltips across all controls, forms, telemetry metrics, and dispatch buttons for rapid discovery without consulting documentation.
+  - **Pre-Dispatch Validation & Error Guarding:** Real-time human-readable validation alerts when attempting to dispatch without valid devices or links (e.g., sender/recipient offline, isolated nodes, or missing links).
+  - **Safe Sample Network Loading:** Smart overwrite detection that alerts and prompts confirmation before overwriting unsaved user configurations when loading sample networks.
 
 - **🎬 Emergency Simulation Replay & Animated Topology:**
   - **Visual Route Replay:** Animates a glowing cyan packet indicator traveling hop-by-hop along the exact calculated BFS route across the network topology canvas.
@@ -126,8 +134,12 @@ com.resqmesh/
 │       ├── ReplayState.java           [Enum: IDLE, PLAYING, PAUSED, COMPLETED, STOPPED]
 │       └── ReplayController.java      [Headless Replay State Machine & Speed Manager]
 │
+├── onboarding/           # Step 12: User Onboarding & Interactive Guidance
+│   ├── TutorialStep.java          [Enum: WELCOME, ADD_DEVICE, CONNECT_DEVICES, etc.]
+│   └── TutorialManager.java       [State Machine: Step progression, hints, validations]
+│
 └── ui/                   # JavaFX Presentation Layer
-    ├── App.java                   [Main Dashboard: BorderPane, cards, form handlers]
+    ├── App.java                   [Main Dashboard: BorderPane, cards, form handlers, onboarding banner]
     ├── NetworkTopologyPane.java   [Custom Canvas: NodeVisual, LinkVisual, MessageIndicatorVisual]
     └── Launcher.java              [CLI / IDE bootstrap companion]
 ```
@@ -148,6 +160,8 @@ com.resqmesh/
    - `ReplayController` decouples playback state management (`IDLE`, `PLAYING`, `PAUSED`, `COMPLETED`, `STOPPED`) and speed timing from JavaFX UI components, enabling fast, 100% headless automated testing.
 7. **Memento / Historical Record Pattern:**
    - `SimulationRecord` stores an immutable snapshot of prior simulation outcomes, routes, and timelines, enabling non-destructive replay review without re-executing BFS or modifying device battery levels.
+8. **Onboarding State Machine & Validation Engine:**
+   - `TutorialManager` decouples user onboarding step progression, interactive completion checks (`isStepSatisfied`), pre-dispatch validation rules, and safe overwrite checks from the JavaFX UI components, guaranteeing 100% headless testability.
 
 ---
 
@@ -198,6 +212,9 @@ ResQMesh/
     │   │           │       ├── SimulationEventType.java # Event milestone types enum
     │   │           │       ├── SimulationRecord.java # Historical snapshot for non-destructive review
     │   │           │       └── SimulationTimeline.java # Chronological event sequence generator
+    │   │           ├── onboarding/                   # Step 12: User Onboarding & Interactive Guidance
+    │   │           │   ├── TutorialManager.java      # State machine & onboarding validator
+    │   │           │   └── TutorialStep.java         # Lifecycle enum for interactive tutorial
     │   │           └── ui/
     │   │               └── NetworkTopologyPane.java  # Visual topology canvas with animated message indicator
     │   └── resources/
@@ -220,6 +237,8 @@ ResQMesh/
         │           │   └── timeline/
         │           │       ├── ReplayControllerTest.java        # Replay state machine, speed & callback tests
         │           │       └── SimulationTimelineTest.java      # Event ordering, relative time & immutability tests
+        │           ├── onboarding/
+        │           │   └── TutorialManagerTest.java             # Step 12: Tutorial progression, validation & safe overwrite tests
         │           └── ui/
         │               └── NetworkTopologyVisualTest.java       # Visual canvas, indicator & replay tests
         └── resources/
@@ -310,7 +329,7 @@ To run the standalone terminal demo without opening the GUI:
 
 ## 🧪 Automated Testing & Verification
 
-The project includes **60 comprehensive automated tests** across persistence, unit, algorithm, timeline replay, and UI visual integration layers:
+The project includes **68 comprehensive automated tests** across persistence, unit, algorithm, timeline replay, onboarding guidance, and UI visual integration layers:
 
 ```bash
 # Execute the full automated test suite
@@ -329,8 +348,9 @@ The project includes **60 comprehensive automated tests** across persistence, un
 | [`EmergencyDeliveryIntegrationTest.java`](file:///src/test/java/com/resqmesh/simulation/EmergencyDeliveryIntegrationTest.java) | End-to-end Alice $\rightarrow$ Medical delivery, intermediate node offline failures, direct link bypass, multi-path BFS selection, and route reset | 7 | **PASSED** |
 | [`SimulationTimelineTest.java`](file:///src/test/java/com/resqmesh/simulation/timeline/SimulationTimelineTest.java) | Step-by-step event ordering, elapsed millisecond progression, non-destructive history review, route consistency, and failed delivery timeline | 7 | **PASSED** |
 | [`ReplayControllerTest.java`](file:///src/test/java/com/resqmesh/simulation/timeline/ReplayControllerTest.java) | State transitions (IDLE, PLAYING, PAUSED, COMPLETED, RESET), speed adjustment factors, step listeners, and failure replay mechanics | 8 | **PASSED** |
+| [`TutorialManagerTest.java`](file:///src/test/java/com/resqmesh/onboarding/TutorialManagerTest.java) | Step-by-step onboarding lifecycle, step satisfaction predicates, skip/restart, pre-dispatch validation scenarios, and safe sample overwrite detection | 8 | **PASSED** |
 | [`NetworkTopologyVisualTest.java`](file:///src/test/java/com/resqmesh/ui/NetworkTopologyVisualTest.java) | Node/link rendering, online/offline styles, HUD inspector, hop badges, message indicator visual token, replay layer, and route animation loading | 7 | **PASSED** |
-| **Total** | | **60** | **100% PASSED** |
+| **Total** | | **68** | **100% PASSED** |
 
 ---
 

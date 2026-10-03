@@ -10,6 +10,8 @@ import com.resqmesh.model.MedicalStation;
 import com.resqmesh.model.Priority;
 import com.resqmesh.model.SecurityStation;
 import com.resqmesh.model.StudentPhone;
+import com.resqmesh.onboarding.TutorialManager;
+import com.resqmesh.onboarding.TutorialStep;
 import com.resqmesh.routing.NetworkGraph;
 import com.resqmesh.routing.ShortestPathStrategy;
 import com.resqmesh.simulation.SimulationEngine;
@@ -31,6 +33,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import javafx.util.StringConverter;
 
 import java.io.File;
@@ -39,23 +42,27 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
  * ResQMesh – Emergency Communication Dashboard
  * User Experience & Guided Workflow Overhaul.
  *
- * Four distinct, uncluttered primary workspaces:
+ * Five distinct, uncluttered primary workspaces:
  * 1. Dashboard: Guided 3-step workflow, KPI cards, network health overview, quick dispatch & outcome snapshot.
  * 2. Network & Devices: Dedicated spacious topology canvas, telemetry table, node controls, and easy provisioning.
  * 3. Emergency Dispatch: Distraction-free dispatch console with presets, human-friendly outcome, and collapsible technical details.
  * 4. Activity History: Timeline event audit trail and real-time terminal feed.
+ * 5. Help & Quick Guide: Comprehensive beginner reference, device specifications, relay rules, and troubleshooting FAQ.
  */
 public class App extends Application {
 
     private static final String APP_TITLE = "ResQMesh – Emergency Communication Dashboard";
     private static final int DEFAULT_WIDTH = 1340;
     private static final int DEFAULT_HEIGHT = 880;
+
+    private Stage primaryStage;
 
     // Backend Simulation Core
     private NetworkGraph graph;
@@ -68,17 +75,31 @@ public class App extends Application {
     private int totalMessagesDispatched = 0;
     private int successfulDeliveries = 0;
 
-    // Section Views & Navigation
+    // Step 12: Onboarding & Interactive Guidance
+    private final TutorialManager tutorialManager = new TutorialManager();
+    private VBox tutorialBanner;
+    private Label tutorialBadgeLabel;
+    private Label tutorialTitleLabel;
+    private Label tutorialDescLabel;
+    private Label tutorialHintLabel;
+    private Button tutorialPrevBtn;
+    private Button tutorialNextBtn;
+    private Button tutorialRestartBtn;
+    private Button tutorialSkipBtn;
+
+    // Section Views & Navigation (5 Clean Workspaces)
     private StackPane viewContainer;
     private ScrollPane dashboardScrollPane;
     private ScrollPane networkScrollPane;
     private ScrollPane dispatchScrollPane;
     private ScrollPane activityScrollPane;
+    private ScrollPane helpScrollPane;
 
     private Button navDashboardBtn;
     private Button navNetworkBtn;
     private Button navDispatchBtn;
     private Button navActivityBtn;
+    private Button navHelpBtn;
     private final List<Button> navButtons = new ArrayList<>();
 
     // Guided Workflow Step Badges / Status Labels (Dashboard)
@@ -160,6 +181,8 @@ public class App extends Application {
 
     @Override
     public void start(Stage primaryStage) {
+        this.primaryStage = primaryStage;
+
         // Initialize Backend
         graph = new NetworkGraph();
         engine = new SimulationEngine(graph, new ShortestPathStrategy());
@@ -172,7 +195,7 @@ public class App extends Application {
         // 1. Left Sidebar Navigation
         root.setLeft(createSidebar());
 
-        // 2. Center View Container (Holds the 4 clean sections)
+        // 2. Center View Container (Holds the 5 clean sections)
         viewContainer = new StackPane();
         viewContainer.setStyle("-fx-background-color: #070b14;");
 
@@ -190,18 +213,29 @@ public class App extends Application {
 
         deviceTable = createDeviceTable();
 
-        // Build the 4 Primary Workspaces
+        // Build the 5 Primary Workspaces
         dashboardScrollPane = wrapInScrollPane(createDashboardView());
         networkScrollPane = wrapInScrollPane(createNetworkView());
         dispatchScrollPane = wrapInScrollPane(createDispatchView());
         activityScrollPane = wrapInScrollPane(createActivityView());
+        helpScrollPane = wrapInScrollPane(createHelpView());
 
         // Default to Dashboard
         showView(dashboardScrollPane, navDashboardBtn);
-        root.setCenter(viewContainer);
 
-        // Preload standard campus disaster relief network
-        loadSampleNetwork();
+        // Center Content Stack: Tutorial Banner on top + Workspaces Container underneath
+        VBox centerContent = new VBox();
+        centerContent.setStyle("-fx-background-color: #070b14;");
+        tutorialBanner = createTutorialBanner();
+        VBox.setVgrow(viewContainer, javafx.scene.layout.Priority.ALWAYS);
+        centerContent.getChildren().addAll(tutorialBanner, viewContainer);
+        root.setCenter(centerContent);
+
+        // Preload standard campus disaster relief network safely (no prompt on initial launch)
+        loadSampleNetwork(false);
+
+        // Initialize tutorial banner display
+        updateTutorialBanner();
 
         // Create Scene & Attach Stylesheet
         Scene scene = new Scene(root, DEFAULT_WIDTH, DEFAULT_HEIGHT);
@@ -262,22 +296,30 @@ public class App extends Application {
 
         brandBox.getChildren().addAll(brandHeader, brandSub);
 
-        // Navigation Menu (4 Clear Primary Sections)
+        // Navigation Menu (5 Clear Primary Sections)
         VBox navMenu = new VBox(6);
         navDashboardBtn = createNavButton("📊 Dashboard", true);
         navNetworkBtn = createNavButton("🗺️ Network & Devices", false);
         navDispatchBtn = createNavButton("🚨 Emergency Dispatch", false);
         navActivityBtn = createNavButton("📜 Activity & History", false);
+        navHelpBtn = createNavButton("❓ Help & Quick Guide", false);
+
+        setTooltip(navDashboardBtn, "Overview dashboard with guided 3-step workflow, KPI metrics, and outcome snapshot");
+        setTooltip(navNetworkBtn, "Interactive visual topology canvas, node power control, and device provisioning");
+        setTooltip(navDispatchBtn, "Emergency message dispatch console with priority settings and BFS route computation");
+        setTooltip(navActivityBtn, "Chronological event timeline audit log and real-time terminal feed");
+        setTooltip(navHelpBtn, "Quick reference guide, device specifications, relay policies, and troubleshooting");
 
         navButtons.clear();
-        navButtons.addAll(List.of(navDashboardBtn, navNetworkBtn, navDispatchBtn, navActivityBtn));
+        navButtons.addAll(List.of(navDashboardBtn, navNetworkBtn, navDispatchBtn, navActivityBtn, navHelpBtn));
 
         navDashboardBtn.setOnAction(e -> showView(dashboardScrollPane, navDashboardBtn));
         navNetworkBtn.setOnAction(e -> showView(networkScrollPane, navNetworkBtn));
         navDispatchBtn.setOnAction(e -> showView(dispatchScrollPane, navDispatchBtn));
         navActivityBtn.setOnAction(e -> showView(activityScrollPane, navActivityBtn));
+        navHelpBtn.setOnAction(e -> showView(helpScrollPane, navHelpBtn));
 
-        navMenu.getChildren().addAll(navDashboardBtn, navNetworkBtn, navDispatchBtn, navActivityBtn);
+        navMenu.getChildren().addAll(navDashboardBtn, navNetworkBtn, navDispatchBtn, navActivityBtn, navHelpBtn);
 
         // Live Mesh Health Monitor Widget
         VBox healthWidget = new VBox(8);
@@ -288,15 +330,19 @@ public class App extends Application {
 
         sidebarActiveNodesCountLabel = new Label("Active Nodes: 0");
         sidebarActiveNodesCountLabel.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px;");
+        setTooltip(sidebarActiveNodesCountLabel, "Operational nodes available for message forwarding");
 
         sidebarLinksCountLabel = new Label("Mesh Density: 0 Links");
         sidebarLinksCountLabel.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px;");
+        setTooltip(sidebarLinksCountLabel, "Active bidirectional wireless channels across the mesh");
 
         Label routingEngineLabel = new Label("Routing: Shortest Path (BFS)");
         routingEngineLabel.setStyle("-fx-text-fill: #34d399; -fx-font-size: 11px; -fx-font-weight: 600;");
+        setTooltip(routingEngineLabel, "Dynamic shortest path discovery using Breadth-First Search");
 
         Label energyRuleLabel = new Label("Energy Drain: -2.0% / hop");
         energyRuleLabel.setStyle("-fx-text-fill: #f59e0b; -fx-font-size: 11px;");
+        setTooltip(energyRuleLabel, "Battery deduction per node traversed in the message path");
 
         healthWidget.getChildren().addAll(healthTitle, sidebarActiveNodesCountLabel, sidebarLinksCountLabel, routingEngineLabel, energyRuleLabel);
 
@@ -305,28 +351,38 @@ public class App extends Application {
         Label actionsTitle = new Label("CONFIGURATION & ACTIONS");
         actionsTitle.setStyle("-fx-font-size: 10px; -fx-font-weight: 800; -fx-text-fill: #38bdf8;");
 
+        Button welcomeBtn = new Button("👋 Welcome & Tutorial");
+        welcomeBtn.setMaxWidth(Double.MAX_VALUE);
+        welcomeBtn.setStyle("-fx-background-color: #0b223d; -fx-text-fill: #38bdf8; -fx-font-size: 12px; -fx-font-weight: bold; -fx-background-radius: 6px; -fx-cursor: hand; -fx-padding: 7 12; -fx-border-color: #0284c7; -fx-border-radius: 6px;");
+        welcomeBtn.setOnAction(e -> showWelcomeDialog());
+        setTooltip(welcomeBtn, "Open Welcome Overview and interactive tutorial launcher");
+
         Button newSimBtn = new Button("✨ New Simulation");
         newSimBtn.setMaxWidth(Double.MAX_VALUE);
         newSimBtn.setStyle("-fx-background-color: #0e223d; -fx-text-fill: #38bdf8; -fx-font-size: 12px; -fx-font-weight: bold; -fx-background-radius: 6px; -fx-cursor: hand; -fx-padding: 7 12; -fx-border-color: #0284c7; -fx-border-radius: 6px;");
         newSimBtn.setOnAction(e -> handleNewSimulation());
+        setTooltip(newSimBtn, "Recharge all nodes to 100% and reset transmission counters");
 
         Button saveBtn = new Button("💾 Save Network (JSON)");
         saveBtn.setMaxWidth(Double.MAX_VALUE);
         saveBtn.getStyleClass().add("btn-ghost");
         saveBtn.setOnAction(e -> handleSaveNetwork());
+        setTooltip(saveBtn, "Export current network topology to a JSON file");
 
         Button loadBtn = new Button("📂 Load Network (JSON)");
         loadBtn.setMaxWidth(Double.MAX_VALUE);
         loadBtn.getStyleClass().add("btn-ghost");
         loadBtn.setOnAction(e -> handleLoadNetwork());
+        setTooltip(loadBtn, "Import and restore a saved network topology from JSON");
 
         Button resetBtn = new Button("↺ Reset Sample Mesh");
         resetBtn.setMaxWidth(Double.MAX_VALUE);
         resetBtn.getStyleClass().add("btn-ghost");
         resetBtn.setOnAction(e -> {
-            loadSampleNetwork();
+            loadSampleNetwork(true);
             log("TOPOLOGY", "Reset to preloaded campus emergency mesh topology.");
         });
+        setTooltip(resetBtn, "Safely load or restore standard 5-node campus disaster network");
 
         Button clearBtn = new Button("✕ Clear Network Graph");
         clearBtn.setMaxWidth(Double.MAX_VALUE);
@@ -336,8 +392,9 @@ public class App extends Application {
             refreshUI();
             log("TOPOLOGY", "Network graph cleared. All devices and links removed.");
         });
+        setTooltip(clearBtn, "Remove all devices and links to start building a custom network");
 
-        actionsBox.getChildren().addAll(actionsTitle, newSimBtn, saveBtn, loadBtn, resetBtn, clearBtn);
+        actionsBox.getChildren().addAll(actionsTitle, welcomeBtn, newSimBtn, saveBtn, loadBtn, resetBtn, clearBtn);
 
         Region spacer = new Region();
         VBox.setVgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
@@ -541,6 +598,7 @@ public class App extends Application {
 
         card.getChildren().addAll(top, titleLbl, descLbl);
         card.setOnMouseClicked(e -> onAction.handle(new javafx.event.ActionEvent()));
+        setTooltip(card, "Click to navigate to " + title + " workspace");
         return card;
     }
 
@@ -557,6 +615,11 @@ public class App extends Application {
         VBox card2 = createKpiCard("ONLINE HEALTH", kpiOnlineHealthLabel, "Available routing nodes", "#10b981", "🟢");
         VBox card3 = createKpiCard("ACTIVE MESH LINKS", kpiMeshLinksLabel, "Bidirectional connections", "#818cf8", "🔗");
         VBox card4 = createKpiCard("DELIVERY SUCCESS", kpiSuccessRateLabel, "Dispatched alerts success", "#f59e0b", "⚡");
+
+        setTooltip(card1, "Total number of communication devices registered in the simulation network");
+        setTooltip(card2, "Operational nodes currently online and able to relay messages vs total devices");
+        setTooltip(card3, "Total active bidirectional wireless connections forming the mesh");
+        setTooltip(card4, "Total messages dispatched and percentage successfully delivered");
 
         HBox.setHgrow(card1, javafx.scene.layout.Priority.ALWAYS);
         HBox.setHgrow(card2, javafx.scene.layout.Priority.ALWAYS);
@@ -633,14 +696,17 @@ public class App extends Application {
                 topologyPane.selectDevice(newV);
             }
         });
+        setTooltip(selectedDeviceComboBox, "Select a device to view status, toggle power, or recharge battery");
 
         dynamicToggleBtn = new Button("Toggle Online / Offline");
         dynamicToggleBtn.getStyleClass().add("btn-rose");
         dynamicToggleBtn.setOnAction(e -> handleToggleStatus());
+        setTooltip(dynamicToggleBtn, "Toggle the operational state (Online/Offline) to test node failure handling");
 
         rechargeBtn = new Button("⚡ Recharge to 100%");
         rechargeBtn.getStyleClass().add("btn-emerald");
         rechargeBtn.setOnAction(e -> handleRecharge());
+        setTooltip(rechargeBtn, "Recharge this node's battery back to 100% (ACTIVE)");
 
         selectedDeviceStatusLabel = new Label("");
         selectedDeviceStatusLabel.setStyle("-fx-text-fill: #38bdf8; -fx-font-size: 11px;");
@@ -662,10 +728,12 @@ public class App extends Application {
 
         addDeviceNameField = new TextField();
         addDeviceNameField.setPromptText("Device name (e.g. Science Quad Relay)");
+        setTooltip(addDeviceNameField, "Enter a unique name or label for the device");
 
         addDeviceTypeSelect = new ComboBox<>();
         addDeviceTypeSelect.getItems().addAll("Student Phone", "Security Station", "Medical Station");
         addDeviceTypeSelect.setValue("Student Phone");
+        setTooltip(addDeviceTypeSelect, "Select device classification: Student Phone, Security Station, or Medical Center");
 
         addDeviceRoleDescLabel = new Label("📱 Student Phone: Handheld node. Relays standard alerts (-2.0% battery/hop). Cannot relay CRITICAL alerts.");
         addDeviceRoleDescLabel.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-line-spacing: 1px;");
@@ -684,6 +752,7 @@ public class App extends Application {
         Button addBtn = new Button("➕ Register Node");
         addBtn.getStyleClass().add("btn-cyan");
         addBtn.setOnAction(e -> handleAddDevice());
+        setTooltip(addBtn, "Register and provision this device into the network graph");
 
         addDeviceFeedbackLabel = new Label("");
         addDeviceFeedbackLabel.getStyleClass().add("feedback-msg");
@@ -707,7 +776,9 @@ public class App extends Application {
         linkGrid.setVgap(10);
 
         linkDeviceAComboBox = createDeviceComboBox();
+        setTooltip(linkDeviceAComboBox, "Select the first node for the bidirectional wireless link");
         linkDeviceBComboBox = createDeviceComboBox();
+        setTooltip(linkDeviceBComboBox, "Select the second node for the bidirectional wireless link");
 
         Label linkHelpLabel = new Label("🔗 Links allow emergency alerts to hop across nodes. Alerts route across the shortest path of connected links.");
         linkHelpLabel.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-line-spacing: 1px;");
@@ -716,6 +787,7 @@ public class App extends Application {
         Button linkBtn = new Button("🔗 Connect Wireless Link");
         linkBtn.getStyleClass().add("btn-blue");
         linkBtn.setOnAction(e -> handleConnectDevices());
+        setTooltip(linkBtn, "Establish a wireless mesh communication channel between the two nodes");
 
         connectFeedbackLabel = new Label("");
         connectFeedbackLabel.getStyleClass().add("feedback-msg");
@@ -870,11 +942,17 @@ public class App extends Application {
         dispatchGrid.setVgap(12);
 
         senderComboBox = createDeviceComboBox();
+        setTooltip(senderComboBox, "Select originating node transmitting the emergency message");
+        senderComboBox.valueProperty().addListener((obs, oldV, newV) -> updateDispatchGuidance());
+
         recipientComboBox = createDeviceComboBox();
+        setTooltip(recipientComboBox, "Select target destination node to receive the message");
+        recipientComboBox.valueProperty().addListener((obs, oldV, newV) -> updateDispatchGuidance());
 
         priorityComboBox = new ComboBox<>();
         priorityComboBox.getItems().addAll(Priority.LOW, Priority.NORMAL, Priority.HIGH, Priority.CRITICAL);
         priorityComboBox.setValue(Priority.NORMAL);
+        setTooltip(priorityComboBox, "Message priority level (Low, Normal, High, or Critical)");
 
         priorityDescLabel = new Label("🔵 Normal Priority: Standard emergency message relay.");
         priorityDescLabel.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px;");
@@ -898,6 +976,7 @@ public class App extends Application {
         messageTextField = new TextField();
         messageTextField.setPromptText("Enter emergency alert or status details...");
         messageTextField.setPrefWidth(320);
+        setTooltip(messageTextField, "Details of the emergency situation or distress report");
 
         dispatchGrid.add(createFormLabel("Sender Node (Origin):"), 0, 0);
         dispatchGrid.add(senderComboBox, 1, 0);
@@ -923,6 +1002,7 @@ public class App extends Application {
             messageTextField.setText("URGENT: Medical assistance requested at Quad Block 4");
             priorityComboBox.setValue(Priority.HIGH);
         });
+        setTooltip(presetMed, "Fill with high-priority medical aid distress alert");
 
         Button presetSec = new Button("⚠️ Hazard Alert");
         presetSec.getStyleClass().add("btn-preset");
@@ -930,6 +1010,7 @@ public class App extends Application {
             messageTextField.setText("HAZARD: Structural blockage reported near Gate 2");
             priorityComboBox.setValue(Priority.NORMAL);
         });
+        setTooltip(presetSec, "Fill with normal-priority hazard alert");
 
         Button presetPing = new Button("ℹ️ Node Heartbeat");
         presetPing.getStyleClass().add("btn-preset");
@@ -937,6 +1018,7 @@ public class App extends Application {
             messageTextField.setText("STATUS: Node heartbeat and path liveness ping");
             priorityComboBox.setValue(Priority.LOW);
         });
+        setTooltip(presetPing, "Fill with low-priority heartbeat ping");
 
         presetRow.getChildren().addAll(quickLbl, presetMed, presetSec, presetPing);
 
@@ -944,6 +1026,7 @@ public class App extends Application {
         dispatchBtn.getStyleClass().add("btn-dispatch");
         dispatchBtn.setMaxWidth(Double.MAX_VALUE);
         dispatchBtn.setOnAction(e -> handleSendMessage());
+        setTooltip(dispatchBtn, "Execute Breadcrumb BFS shortest-path routing algorithm to transmit alert");
 
         dispatchCard.getChildren().addAll(dispatchGrid, presetRow, dispatchBtn);
         view.getChildren().add(dispatchCard);
@@ -964,6 +1047,7 @@ public class App extends Application {
 
         resultBadge = new Label("WAITING FOR DISPATCH");
         resultBadge.setStyle("-fx-background-color: #1e293b; -fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px;");
+        setTooltip(resultBadge, "Indicates message delivery status and total hops traversed");
 
         Region outcomeSpacer = new Region();
         HBox.setHgrow(outcomeSpacer, javafx.scene.layout.Priority.ALWAYS);
@@ -980,10 +1064,12 @@ public class App extends Application {
                 topologyPane.playReplay();
             }
         });
+        setTooltip(replayFromOutcomeBtn, "Watch animated visual replay of message propagation on the network canvas");
 
         viewTimelineFromOutcomeBtn = new Button("⏱️ View Timeline");
         viewTimelineFromOutcomeBtn.getStyleClass().add("btn-ghost");
         viewTimelineFromOutcomeBtn.setOnAction(e -> showView(activityScrollPane, navActivityBtn));
+        setTooltip(viewTimelineFromOutcomeBtn, "View chronological audit trail of simulation events in Activity History");
 
         outcomeStatusRow.getChildren().addAll(outcomeTitle, resultBadge, outcomeSpacer, replayFromOutcomeBtn, viewTimelineFromOutcomeBtn);
 
@@ -1012,6 +1098,7 @@ public class App extends Application {
         toggleTechDetailsBtn = new Button("🔍 [ Show Technical Route Details ]");
         toggleTechDetailsBtn.getStyleClass().add("btn-ghost");
         toggleTechDetailsBtn.setStyle("-fx-font-size: 10px; -fx-padding: 3 8;");
+        setTooltip(toggleTechDetailsBtn, "Toggle technical diagnostics including hop counts, IDs, and battery impact");
 
         technicalDetailsBox = new VBox(6);
         technicalDetailsBox.getStyleClass().add("tech-details-box");
@@ -1278,13 +1365,15 @@ public class App extends Application {
         Priority priority = priorityComboBox.getValue();
         String content = messageTextField.getText();
 
-        if (sender == null || recipient == null) {
-            showAlert("Incomplete Form", "Please select both an Origin Sender node and a Target Recipient node.");
-            return;
-        }
-
-        if (sender.equals(recipient)) {
-            showAlert("Invalid Route", "Sender and Target cannot be the same device. Please select two distinct nodes.");
+        String validationError = tutorialManager.getDispatchValidationMessage(
+                sender, recipient, graph.getDeviceCount(), graph.getTotalLinkCount() / 2);
+        if (validationError != null) {
+            if (dispatchGuidanceBanner != null && dispatchGuidanceLabel != null) {
+                dispatchGuidanceBanner.getStyleClass().setAll("guide-banner-warning");
+                dispatchGuidanceLabel.setText("⚠️ " + validationError);
+            }
+            log("VALIDATION", "Dispatch blocked: " + validationError);
+            showAlert("Cannot Dispatch Alert", validationError);
             return;
         }
 
@@ -1303,6 +1392,12 @@ public class App extends Application {
         log("DISPATCH", String.format("[%s] Initiated from '%s' to '%s' | Priority: %s", msgId, sender.getName(), recipient.getName(), priority));
 
         SimulationResult result = engine.send(message);
+
+        // Advance tutorial step if user is currently on DISPATCH_ALERT step
+        if (tutorialManager.getCurrentStep() == TutorialStep.DISPATCH_ALERT) {
+            tutorialManager.nextStep();
+            updateTutorialBanner();
+        }
 
         // Update Visual Outcome & Topology Graph Highlighting
         if (result.delivered()) {
@@ -1432,6 +1527,13 @@ public class App extends Application {
         addDeviceFeedbackLabel.setText("✔ Registered " + type + ": '" + newDev.getName() + "' [" + newDev.getId() + "] successfully!");
         addDeviceFeedbackLabel.setStyle("-fx-text-fill: #34d399;");
 
+        // If on tutorial ADD_DEVICE step, provide helpful guidance
+        if (tutorialManager.getCurrentStep() == TutorialStep.ADD_DEVICE && tutorialHintLabel != null) {
+            if (graph.getDeviceCount() >= 2) {
+                tutorialHintLabel.setText("✔ Registered " + graph.getDeviceCount() + " nodes! Click 'Next Step ➡' to establish wireless mesh links.");
+            }
+        }
+
         refreshUI();
         selectedDeviceComboBox.setValue(newDev);
 
@@ -1458,6 +1560,14 @@ public class App extends Application {
         if (connected) {
             connectFeedbackLabel.setText("✔ Established mesh link: '" + devA.getName() + "' <───> '" + devB.getName() + "'");
             connectFeedbackLabel.setStyle("-fx-text-fill: #34d399;");
+
+            // If on tutorial CONNECT_DEVICES step, provide helpful guidance
+            if (tutorialManager.getCurrentStep() == TutorialStep.CONNECT_DEVICES && tutorialHintLabel != null) {
+                if (graph.getTotalLinkCount() / 2 >= 1) {
+                    tutorialHintLabel.setText("✔ Wireless link established! Click 'Next Step ➡' to dispatch an emergency alert.");
+                }
+            }
+
             refreshUI();
             log("LINK", String.format("Established mesh link: '%s' <───> '%s'", devA.getName(), devB.getName()));
         } else {
@@ -1598,6 +1708,31 @@ public class App extends Application {
     // 7. Helpers & State Synchronization
     // --------------------------------------------------------------------------
     private void loadSampleNetwork() {
+        loadSampleNetwork(true);
+    }
+
+    private void loadSampleNetwork(boolean confirmIfNotEmpty) {
+        if (confirmIfNotEmpty && tutorialManager.requiresConfirmationToLoadSample(graph.getDeviceCount(), graph.getTotalLinkCount() / 2)) {
+            Alert confirmAlert = new Alert(Alert.AlertType.CONFIRMATION);
+            confirmAlert.setTitle("Replace Current Network?");
+            confirmAlert.setHeaderText("Load Sample Campus Network");
+            confirmAlert.setContentText(String.format(
+                    "Your current network contains %d registered device(s) and %d active connection(s).\n\n" +
+                    "Loading the sample network will replace your existing topology.\n\n" +
+                    "Do you want to proceed and load the sample network?",
+                    graph.getDeviceCount(), graph.getTotalLinkCount() / 2));
+
+            ButtonType replaceBtn = new ButtonType("Replace & Load Sample", ButtonBar.ButtonData.OK_DONE);
+            ButtonType cancelBtn = new ButtonType("Cancel (Keep Current)", ButtonBar.ButtonData.CANCEL_CLOSE);
+            confirmAlert.getButtonTypes().setAll(replaceBtn, cancelBtn);
+
+            Optional<ButtonType> result = confirmAlert.showAndWait();
+            if (result.isEmpty() || result.get() != replaceBtn) {
+                log("CONFIG", "Sample network loading cancelled by user. Existing network preserved.");
+                return;
+            }
+        }
+
         graph.clear();
         deviceIdCounter = 1;
 
@@ -1704,18 +1839,409 @@ public class App extends Application {
         }
 
         // Update Contextual Dispatch Guidance Banner
-        if (dispatchGuidanceBanner != null && dispatchGuidanceLabel != null) {
-            if (totalDevices < 2) {
-                dispatchGuidanceBanner.getStyleClass().setAll("guide-banner-warning");
-                dispatchGuidanceLabel.setText("⚠️ Setup Incomplete: You need at least 2 registered devices in the network before dispatching an alert. Click 'Network & Devices' in the sidebar to add nodes.");
-            } else if (totalLinks < 1) {
-                dispatchGuidanceBanner.getStyleClass().setAll("guide-banner-warning");
-                dispatchGuidanceLabel.setText("⚠️ Mesh Disconnected: Registered devices currently have no active links between them. Connect devices in 'Network & Devices' to establish communication paths.");
-            } else {
-                dispatchGuidanceBanner.getStyleClass().setAll("guide-banner");
-                dispatchGuidanceLabel.setText("💡 Routing Tip: Emergency alerts propagate along the shortest active path discovered via BFS. Participating nodes deduct -2.0% battery per hop.");
-            }
+        updateDispatchGuidance();
+
+        // Update Step 12 Tutorial Banner State
+        updateTutorialBanner();
+    }
+
+    private void updateDispatchGuidance() {
+        if (dispatchGuidanceBanner == null || dispatchGuidanceLabel == null) return;
+        CommunicationDevice sender = senderComboBox != null ? senderComboBox.getValue() : null;
+        CommunicationDevice recipient = recipientComboBox != null ? recipientComboBox.getValue() : null;
+        int devCount = graph != null ? graph.getDeviceCount() : 0;
+        int linkCount = graph != null ? graph.getTotalLinkCount() / 2 : 0;
+
+        String msg = tutorialManager.getDispatchValidationMessage(sender, recipient, devCount, linkCount);
+        if (msg != null) {
+            dispatchGuidanceBanner.getStyleClass().setAll("guide-banner-warning");
+            dispatchGuidanceLabel.setText("⚠️ " + msg);
+        } else {
+            dispatchGuidanceBanner.getStyleClass().setAll("guide-banner");
+            dispatchGuidanceLabel.setText("💡 Ready to Dispatch: Shortest active path will be computed using Breadcrumb BFS. Participating nodes consume -2.0% battery per hop.");
         }
+    }
+
+    private void setTooltip(javafx.scene.Node node, String text) {
+        if (node != null && text != null && !text.isEmpty()) {
+            Tooltip tt = new Tooltip(text);
+            tt.setShowDelay(Duration.millis(300));
+            Tooltip.install(node, tt);
+        }
+    }
+
+    private VBox createTutorialBanner() {
+        VBox banner = new VBox(8);
+        banner.getStyleClass().add("tutorial-banner");
+        banner.setPadding(new Insets(10, 16, 10, 16));
+
+        HBox topRow = new HBox(10);
+        topRow.setAlignment(Pos.CENTER_LEFT);
+
+        tutorialBadgeLabel = new Label("TUTORIAL");
+        tutorialBadgeLabel.getStyleClass().add("tutorial-badge");
+
+        tutorialTitleLabel = new Label("Interactive Onboarding Guide");
+        tutorialTitleLabel.getStyleClass().add("tutorial-title");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
+
+        tutorialPrevBtn = new Button("⬅ Previous");
+        tutorialPrevBtn.getStyleClass().add("tutorial-btn");
+        tutorialPrevBtn.setOnAction(e -> {
+            tutorialManager.previousStep();
+            applyTutorialStep();
+        });
+        setTooltip(tutorialPrevBtn, "Return to previous onboarding step");
+
+        tutorialNextBtn = new Button("Next Step ➡");
+        tutorialNextBtn.getStyleClass().add("tutorial-btn-primary");
+        tutorialNextBtn.setOnAction(e -> {
+            tutorialManager.nextStep();
+            applyTutorialStep();
+        });
+        setTooltip(tutorialNextBtn, "Advance to the next onboarding tutorial step");
+
+        tutorialRestartBtn = new Button("↺ Restart");
+        tutorialRestartBtn.getStyleClass().add("tutorial-btn");
+        tutorialRestartBtn.setOnAction(e -> {
+            tutorialManager.restartTutorial();
+            applyTutorialStep();
+        });
+        setTooltip(tutorialRestartBtn, "Restart tutorial from the beginning");
+
+        tutorialSkipBtn = new Button("✕ Skip Tutorial");
+        tutorialSkipBtn.getStyleClass().add("tutorial-btn");
+        tutorialSkipBtn.setOnAction(e -> {
+            tutorialManager.skipTutorial();
+            updateTutorialBanner();
+        });
+        setTooltip(tutorialSkipBtn, "Dismiss tutorial guidance at any time");
+
+        topRow.getChildren().addAll(tutorialBadgeLabel, tutorialTitleLabel, spacer, tutorialPrevBtn, tutorialNextBtn, tutorialRestartBtn, tutorialSkipBtn);
+
+        tutorialDescLabel = new Label("");
+        tutorialDescLabel.getStyleClass().add("tutorial-desc");
+        tutorialDescLabel.setWrapText(true);
+
+        tutorialHintLabel = new Label("");
+        tutorialHintLabel.getStyleClass().add("tutorial-hint");
+        tutorialHintLabel.setWrapText(true);
+
+        banner.getChildren().addAll(topRow, tutorialDescLabel, tutorialHintLabel);
+        return banner;
+    }
+
+    private void applyTutorialStep() {
+        TutorialStep step = tutorialManager.getCurrentStep();
+        switch (step) {
+            case WELCOME:
+            case ADD_DEVICE:
+                showView(networkScrollPane, navNetworkBtn);
+                if (networkTabPane != null && topologyTab != null) {
+                    networkTabPane.getSelectionModel().select(topologyTab);
+                }
+                break;
+            case CONNECT_DEVICES:
+                showView(networkScrollPane, navNetworkBtn);
+                break;
+            case DISPATCH_ALERT:
+                showView(dispatchScrollPane, navDispatchBtn);
+                break;
+            case REVIEW_OUTCOME:
+                showView(dashboardScrollPane, navDashboardBtn);
+                break;
+            case COMPLETED:
+            case SKIPPED:
+                break;
+        }
+        updateTutorialBanner();
+    }
+
+    private void updateTutorialBanner() {
+        if (tutorialBanner == null) return;
+        boolean active = tutorialManager.isActive();
+        tutorialBanner.setVisible(active);
+        tutorialBanner.setManaged(active);
+        if (!active) return;
+
+        TutorialStep step = tutorialManager.getCurrentStep();
+        int num = step.getStepNumber();
+        if (num == 0) {
+            tutorialBadgeLabel.setText("WELCOME");
+        } else if (num >= 1 && num <= 4) {
+            tutorialBadgeLabel.setText(String.format("STEP %d OF 4", num));
+        } else {
+            tutorialBadgeLabel.setText("STATUS");
+        }
+
+        tutorialTitleLabel.setText(step.getTitle());
+        tutorialDescLabel.setText(tutorialManager.getStepInstruction());
+        tutorialHintLabel.setText("👉 Action: " + tutorialManager.getActionHint());
+
+        tutorialPrevBtn.setDisable(step == TutorialStep.WELCOME || step == TutorialStep.ADD_DEVICE);
+
+        if (step == TutorialStep.COMPLETED) {
+            tutorialNextBtn.setText("Finish ✔");
+            tutorialNextBtn.setOnAction(e -> {
+                tutorialManager.skipTutorial();
+                updateTutorialBanner();
+            });
+        } else {
+            tutorialNextBtn.setText("Next Step ➡");
+            tutorialNextBtn.setOnAction(e -> {
+                tutorialManager.nextStep();
+                applyTutorialStep();
+            });
+        }
+    }
+
+    private void showWelcomeDialog() {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("Welcome to ResQMesh");
+        if (primaryStage != null) {
+            dialog.initOwner(primaryStage);
+        }
+
+        DialogPane pane = dialog.getDialogPane();
+        pane.getStyleClass().add("welcome-modal");
+        pane.setStyle("-fx-background-color: #080e1c; -fx-border-color: #0284c7; -fx-border-width: 1.5px; -fx-background-radius: 12px; -fx-border-radius: 12px;");
+
+        URL cssResource = getClass().getResource("/style.css");
+        if (cssResource != null) {
+            pane.getStylesheets().add(cssResource.toExternalForm());
+        }
+
+        VBox content = new VBox(16);
+        content.setPrefWidth(580);
+        content.setPadding(new Insets(10, 10, 10, 10));
+
+        // Header
+        HBox header = new HBox(12);
+        header.setAlignment(Pos.CENTER_LEFT);
+        Label icon = new Label("🛡️");
+        icon.setStyle("-fx-font-size: 30px;");
+
+        VBox titleBox = new VBox(3);
+        Label title = new Label("Welcome to ResQMesh");
+        title.setStyle("-fx-font-size: 20px; -fx-font-weight: 900; -fx-text-fill: #22d3ee;");
+        Label subtitle = new Label("Offline Emergency Disaster Communication & Multi-Hop BFS Simulator");
+        subtitle.setStyle("-fx-font-size: 12px; -fx-text-fill: #94a3b8;");
+        titleBox.getChildren().addAll(title, subtitle);
+        header.getChildren().addAll(icon, titleBox);
+
+        // Introduction
+        Label desc = new Label(
+                "When natural disasters or grid failures disable cellular towers and internet infrastructure, " +
+                "ResQMesh establishes a resilient, decentralized peer-to-peer mesh network.\n\n" +
+                "• Student Phones, Security Posts, and Medical Centers collaborate dynamically.\n" +
+                "• Emergency distress alerts find the shortest path with lowest latency using Breadth-First Search (BFS).\n" +
+                "• Each wireless hop consumes battery energy (-2.0%), simulating real-world hardware constraints.\n\n" +
+                "Choose an option below to get started:"
+        );
+        desc.setStyle("-fx-text-fill: #cbd5e1; -fx-font-size: 12px; -fx-line-spacing: 3px;");
+        desc.setWrapText(true);
+
+        // Options
+        VBox options = new VBox(10);
+
+        Button startTutBtn = new Button("🎓 Start Interactive Tutorial (Step-by-Step Guide)");
+        startTutBtn.setMaxWidth(Double.MAX_VALUE);
+        startTutBtn.getStyleClass().add("btn-cyan");
+        startTutBtn.setOnAction(e -> {
+            dialog.close();
+            tutorialManager.startFromStep1();
+            applyTutorialStep();
+        });
+
+        Button loadSampleBtn = new Button("📦 Load Sample Campus Network (Ready to Dispatch)");
+        loadSampleBtn.setMaxWidth(Double.MAX_VALUE);
+        loadSampleBtn.getStyleClass().add("btn-blue");
+        loadSampleBtn.setOnAction(e -> {
+            dialog.close();
+            loadSampleNetwork(false);
+            showView(dashboardScrollPane, navDashboardBtn);
+        });
+
+        Button newSimBtn = new Button("✨ New Blank Simulation (Build Network From Scratch)");
+        newSimBtn.setMaxWidth(Double.MAX_VALUE);
+        newSimBtn.getStyleClass().add("btn-ghost");
+        newSimBtn.setOnAction(e -> {
+            dialog.close();
+            graph.clear();
+            refreshUI();
+            showView(networkScrollPane, navNetworkBtn);
+        });
+
+        Button guideBtn = new Button("❓ Open Quick Reference & Troubleshooting Guide");
+        guideBtn.setMaxWidth(Double.MAX_VALUE);
+        guideBtn.getStyleClass().add("btn-ghost");
+        guideBtn.setOnAction(e -> {
+            dialog.close();
+            showView(helpScrollPane, navHelpBtn);
+        });
+
+        options.getChildren().addAll(startTutBtn, loadSampleBtn, newSimBtn, guideBtn);
+        content.getChildren().addAll(header, desc, options);
+
+        pane.setContent(content);
+        pane.getButtonTypes().add(ButtonType.CLOSE);
+
+        Button closeBtn = (Button) pane.lookupButton(ButtonType.CLOSE);
+        if (closeBtn != null) {
+            closeBtn.setText("Dismiss & Explore");
+            closeBtn.setStyle("-fx-background-color: #1e293b; -fx-text-fill: #94a3b8; -fx-font-size: 11px;");
+        }
+
+        dialog.showAndWait();
+    }
+
+    private VBox createHelpView() {
+        VBox view = new VBox(16);
+        view.setPadding(new Insets(18, 22, 22, 22));
+
+        view.getChildren().add(createSectionHeader("Help & Quick Reference Guide",
+                "Comprehensive instructions, device specifications, relay policies, and error recovery"));
+
+        // Interactive Quick Actions Strip
+        HBox quickStrip = new HBox(12);
+        quickStrip.setAlignment(Pos.CENTER_LEFT);
+        quickStrip.setStyle("-fx-background-color: #0b1324; -fx-background-radius: 8px; -fx-padding: 10px 14px; -fx-border-color: #192742; -fx-border-radius: 8px;");
+
+        Label quickLbl = new Label("Interactive Tools:");
+        quickLbl.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 12px; -fx-font-weight: 700;");
+
+        Button tutBtn = new Button("🎓 Launch Interactive Tutorial");
+        tutBtn.getStyleClass().add("btn-cyan");
+        tutBtn.setOnAction(e -> {
+            tutorialManager.startFromStep1();
+            applyTutorialStep();
+        });
+        setTooltip(tutBtn, "Start the step-by-step guided onboarding walkthrough");
+
+        Button welcomeBtn = new Button("👋 Welcome Overview Modal");
+        welcomeBtn.getStyleClass().add("btn-blue");
+        welcomeBtn.setOnAction(e -> showWelcomeDialog());
+        setTooltip(welcomeBtn, "Open the high-level ResQMesh welcome window");
+
+        Button loadSampleBtn = new Button("📦 Load Standard Campus Mesh");
+        loadSampleBtn.getStyleClass().add("btn-ghost");
+        loadSampleBtn.setOnAction(e -> {
+            loadSampleNetwork(true);
+            showView(dashboardScrollPane, navDashboardBtn);
+        });
+        setTooltip(loadSampleBtn, "Safely load the preconfigured 5-device disaster response network");
+
+        quickStrip.getChildren().addAll(quickLbl, tutBtn, welcomeBtn, loadSampleBtn);
+        view.getChildren().add(quickStrip);
+
+        // Row 1: Workflow & Device Types
+        HBox row1 = new HBox(16);
+        HBox.setHgrow(row1, javafx.scene.layout.Priority.ALWAYS);
+
+        // Card 1: 3-Step Guided Workflow
+        VBox workflowCard = createCard("🚀 The 3-Step Core Workflow", "How disaster message routing operates in ResQMesh");
+        workflowCard.setPrefWidth(580);
+        HBox.setHgrow(workflowCard, javafx.scene.layout.Priority.ALWAYS);
+
+        VBox stepsBox = new VBox(8);
+        stepsBox.getChildren().addAll(
+                createHelpItem("1. Provision Devices (Network & Devices)",
+                        "Register communication nodes representing student phones, security posts, and medical centers across campus."),
+                createHelpItem("2. Connect Wireless Links (Network & Devices)",
+                        "Establish peer-to-peer RF links between nodes in transmission range. Packets only propagate through connected links."),
+                createHelpItem("3. Dispatch Emergency Alert (Emergency Dispatch)",
+                        "Choose sender, recipient, and priority. The simulation engine dynamically discovers the shortest path using Breadth-First Search (BFS).")
+        );
+        workflowCard.getChildren().add(stepsBox);
+
+        // Card 2: Device Classification
+        VBox devicesCard = createCard("📱 Device Classifications & Roles", "Capabilities and relay authorization policies");
+        devicesCard.setPrefWidth(580);
+        HBox.setHgrow(devicesCard, javafx.scene.layout.Priority.ALWAYS);
+
+        VBox devBox = new VBox(8);
+        devBox.getChildren().addAll(
+                createHelpItem("📱 Student Phone (Handheld)",
+                        "Mobile battery-operated handheld node. Relays LOW, NORMAL, and HIGH priority alerts. Blocked from relaying CRITICAL life-safety alerts."),
+                createHelpItem("🛡️ Security Station (Fixed Post)",
+                        "Stationary security post with backup power. Fully authorized to relay all alerts, including CRITICAL life-safety messages."),
+                createHelpItem("🏥 Medical Center (Triage Center)",
+                        "Fixed high-capacity healthcare facility. Priority destination for medical aid alerts and full-priority backbone relay.")
+        );
+        devicesCard.getChildren().add(devBox);
+
+        row1.getChildren().addAll(workflowCard, devicesCard);
+        view.getChildren().add(row1);
+
+        // Row 2: Message Priorities & Battery Management
+        HBox row2 = new HBox(16);
+        HBox.setHgrow(row2, javafx.scene.layout.Priority.ALWAYS);
+
+        // Card 3: Priority Levels
+        VBox priorityCard = createCard("🚨 Message Priority Levels", "Traffic handling and transmission urgency rules");
+        priorityCard.setPrefWidth(580);
+        HBox.setHgrow(priorityCard, javafx.scene.layout.Priority.ALWAYS);
+
+        VBox prioBox = new VBox(8);
+        prioBox.getChildren().addAll(
+                createHelpItem("🟢 LOW Priority", "Routine network check-in and node connectivity pings. Relayed across all operational nodes."),
+                createHelpItem("🔵 NORMAL Priority", "Standard situational awareness communications and basic resource inquiries."),
+                createHelpItem("🟠 HIGH Priority", "Urgent disaster assistance and hazard alerts requiring immediate relay."),
+                createHelpItem("🔴 CRITICAL Priority", "Immediate threat-to-life emergencies. For reliability, strictly restricted from relaying through student handhelds.")
+        );
+        priorityCard.getChildren().add(prioBox);
+
+        // Card 4: Battery & Power Mechanics
+        VBox powerCard = createCard("🔋 Battery Consumption & Node States", "Energy drain constraints during disaster operation");
+        powerCard.setPrefWidth(580);
+        HBox.setHgrow(powerCard, javafx.scene.layout.Priority.ALWAYS);
+
+        VBox pwrBox = new VBox(8);
+        pwrBox.getChildren().addAll(
+                createHelpItem("⚡ -2.0% Battery Drain / Hop", "Every node participating in a message route consumes 2.0% battery charge per hop."),
+                createHelpItem("🟡 Low Battery Warning (≤ 20%)", "Nodes enter LOW_BATTERY status but can still route until fully drained."),
+                createHelpItem("🔴 Depleted State (0% Battery)", "Nodes shut down completely (OFFLINE) and cannot transmit or forward until recharged to 100%."),
+                createHelpItem("⚡ Recharge Action", "Select any device in 'Network & Devices' and click 'Recharge to 100%' to restore operational state.")
+        );
+        powerCard.getChildren().add(pwrBox);
+
+        row2.getChildren().addAll(priorityCard, powerCard);
+        view.getChildren().add(row2);
+
+        // Row 3: Common Routing Errors & Solutions
+        VBox errorCard = createCard("⚠️ Common Routing Errors & How to Fix Them", "Quick troubleshooting for failed dispatches and unreachable routes");
+        VBox errBox = new VBox(10);
+        errBox.getChildren().addAll(
+                createHelpItem("❌ 'Delivery Failed: No route found between sender and recipient'",
+                        "Cause: The network is partitioned or lacks connecting links between nodes.\nFix: Go to 'Network & Devices', select intermediate nodes, and click 'Connect Wireless Link'."),
+                createHelpItem("❌ 'Cannot dispatch: Sender / Recipient is OFFLINE or Depleted'",
+                        "Cause: Node was toggled offline or has reached 0% battery.\nFix: Go to 'Network & Devices', select the node, and click 'Bring ONLINE' or 'Recharge to 100%'."),
+                createHelpItem("❌ 'CRITICAL alert failed despite continuous path'",
+                        "Cause: A Student Phone was in the path. Handheld phones cannot forward CRITICAL alerts.\nFix: Ensure the route passes exclusively through Security Stations and Medical Centers, or reduce priority to HIGH."),
+                createHelpItem("❌ 'Origin Sender and Target Recipient cannot be the same'",
+                        "Cause: A node cannot route an emergency alert to itself.\nFix: Select two distinct devices from the dropdowns.")
+        );
+        errorCard.getChildren().add(errBox);
+        view.getChildren().add(errorCard);
+
+        return view;
+    }
+
+    private VBox createHelpItem(String title, String body) {
+        VBox box = new VBox(3);
+        box.setStyle("-fx-background-color: #0b1324; -fx-padding: 8px 12px; -fx-background-radius: 6px; -fx-border-color: #192742; -fx-border-radius: 6px;");
+
+        Label t = new Label(title);
+        t.setStyle("-fx-font-size: 12px; -fx-font-weight: 800; -fx-text-fill: #38bdf8;");
+
+        Label b = new Label(body);
+        b.setStyle("-fx-font-size: 11px; -fx-text-fill: #94a3b8; -fx-line-spacing: 2px;");
+        b.setWrapText(true);
+
+        box.getChildren().addAll(t, b);
+        return box;
     }
 
     private ComboBox<CommunicationDevice> createDeviceComboBox() {
