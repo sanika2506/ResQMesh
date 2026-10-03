@@ -219,7 +219,11 @@ public class App extends Application {
             return new SimpleStringProperty(peers.isEmpty() ? "(Isolated)" : peers);
         });
 
-        deviceTable.getColumns().addAll(nameCol, typeCol, batteryCol, statusCol, linksCol);
+        deviceTable.getColumns().add(nameCol);
+        deviceTable.getColumns().add(typeCol);
+        deviceTable.getColumns().add(batteryCol);
+        deviceTable.getColumns().add(statusCol);
+        deviceTable.getColumns().add(linksCol);
         deviceTable.setItems(deviceObservableList);
 
         // When a row is selected in the table, sync it with the toggle dropdown

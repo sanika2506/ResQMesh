@@ -14,35 +14,21 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>17</maven.compiler.release>
-        <javafx.version>21.0.2</javafx.version>
+        <javafx.version>21.0.6</javafx.version>
     </properties>
 
     <dependencies>
-        <!-- JavaFX Controls (UI components: buttons, labels, layouts) -->
+        <!-- JavaFX Controls (includes javafx-graphics and javafx-base) -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.version}</version>
         </dependency>
 
-        <!-- JavaFX Graphics -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-graphics</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-
-        <!-- JavaFX FXML (ready for future FXML-based UI layouts) -->
+        <!-- JavaFX FXML -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-
-        <!-- JavaFX Base -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-base</artifactId>
             <version>${javafx.version}</version>
         </dependency>
 
@@ -64,6 +50,9 @@
                 <version>3.13.0</version>
                 <configuration>
                     <release>17</release>
+                    <compilerArgs>
+                        <arg>-Xlint:unchecked</arg>
+                    </compilerArgs>
                 </configuration>
             </plugin>
 
