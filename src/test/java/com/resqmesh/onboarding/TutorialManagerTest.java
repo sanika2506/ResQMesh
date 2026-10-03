@@ -209,3 +209,4 @@ class TutorialManagerTest {
         assertNull(manager.getDispatchValidationMessage(alice, bob, 2, 1));
     }
 }
+// End of TutorialManagerTest

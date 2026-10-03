@@ -379,7 +379,7 @@ public class App extends Application {
         resetBtn.setMaxWidth(Double.MAX_VALUE);
         resetBtn.getStyleClass().add("btn-ghost");
         resetBtn.setOnAction(e -> {
-            loadSampleNetwork(true);
+            loadSampleNetwork();
             log("TOPOLOGY", "Reset to preloaded campus emergency mesh topology.");
         });
         setTooltip(resetBtn, "Safely load or restore standard 5-node campus disaster network");
@@ -2128,7 +2128,7 @@ public class App extends Application {
         Button loadSampleBtn = new Button("📦 Load Standard Campus Mesh");
         loadSampleBtn.getStyleClass().add("btn-ghost");
         loadSampleBtn.setOnAction(e -> {
-            loadSampleNetwork(true);
+            loadSampleNetwork();
             showView(dashboardScrollPane, navDashboardBtn);
         });
         setTooltip(loadSampleBtn, "Safely load the preconfigured 5-device disaster response network");
