@@ -15,7 +15,6 @@ import com.resqmesh.routing.ShortestPathStrategy;
 import com.resqmesh.simulation.SimulationEngine;
 import com.resqmesh.simulation.SimulationResult;
 import com.resqmesh.simulation.timeline.SimulationEvent;
-import com.resqmesh.simulation.timeline.SimulationEventType;
 import com.resqmesh.simulation.timeline.SimulationRecord;
 import com.resqmesh.simulation.timeline.SimulationTimeline;
 import com.resqmesh.ui.NetworkTopologyPane;

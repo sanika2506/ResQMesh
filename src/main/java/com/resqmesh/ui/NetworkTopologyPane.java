@@ -7,9 +7,6 @@ import com.resqmesh.model.MedicalStation;
 import com.resqmesh.model.SecurityStation;
 import com.resqmesh.routing.NetworkGraph;
 import com.resqmesh.simulation.timeline.ReplayController;
-import com.resqmesh.simulation.timeline.ReplayState;
-import com.resqmesh.simulation.timeline.SimulationEvent;
-import com.resqmesh.simulation.timeline.SimulationEventType;
 import com.resqmesh.simulation.timeline.SimulationRecord;
 
 import javafx.animation.Animation;
