@@ -5,10 +5,8 @@ import com.resqmesh.model.CommunicationLink;
 import com.resqmesh.model.DeviceStatus;
 import com.resqmesh.model.MedicalStation;
 import com.resqmesh.model.SecurityStation;
-import com.resqmesh.model.StudentPhone;
 import com.resqmesh.routing.NetworkGraph;
 
-import javafx.animation.FadeTransition;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.geometry.Insets;
@@ -21,7 +19,6 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
-import javafx.util.Duration;
 
 import java.util.*;
 import java.util.function.Consumer;
