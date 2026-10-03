@@ -14,6 +14,10 @@ import com.resqmesh.routing.NetworkGraph;
 import com.resqmesh.routing.ShortestPathStrategy;
 import com.resqmesh.simulation.SimulationEngine;
 import com.resqmesh.simulation.SimulationResult;
+import com.resqmesh.simulation.timeline.SimulationEvent;
+import com.resqmesh.simulation.timeline.SimulationEventType;
+import com.resqmesh.simulation.timeline.SimulationRecord;
+import com.resqmesh.simulation.timeline.SimulationTimeline;
 import com.resqmesh.ui.NetworkTopologyPane;
 
 import javafx.application.Application;
@@ -24,6 +28,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -100,6 +105,18 @@ public class App extends Application {
     // Sidebar Live Monitor Labels
     private Label sidebarActiveNodesCountLabel;
     private Label sidebarLinksCountLabel;
+
+    // Step 11: Event Timeline & Simulation History
+    private final ObservableList<SimulationRecord> simulationHistory = FXCollections.observableArrayList();
+    private final ObservableList<SimulationEvent> currentTimelineEvents = FXCollections.observableArrayList();
+    private ComboBox<SimulationRecord> historyComboBox;
+    private TableView<SimulationEvent> timelineTable;
+    private Label timelineSummaryLabel;
+    private Label eventDetailLabel;
+    private Button replayFromOutcomeBtn;
+    private Tab topologyTab;
+    private Tab tableTab;
+    private Tab timelineTab;
 
     @Override
     public void start(Stage primaryStage) {
@@ -195,6 +212,7 @@ public class App extends Application {
         VBox navMenu = new VBox(6);
         Button navTopology = createNavButton("🗺️ Visual Topology", true);
         Button navTable = createNavButton("📋 Node Telemetry", false);
+        Button navTimeline = createNavButton("⏱️ Event Timeline", false);
         Button navDispatch = createNavButton("🚨 Emergency Dispatch", false);
         Button navLogs = createNavButton("📜 Terminal Logs", false);
 
@@ -208,6 +226,11 @@ public class App extends Application {
             if (networkTabPane != null) networkTabPane.getSelectionModel().select(1);
         });
 
+        navTimeline.setOnAction(e -> {
+            setActiveNav(navMenu, navTimeline);
+            if (networkTabPane != null) networkTabPane.getSelectionModel().select(2);
+        });
+
         navDispatch.setOnAction(e -> {
             setActiveNav(navMenu, navDispatch);
             if (messageTextField != null) messageTextField.requestFocus();
@@ -218,7 +241,7 @@ public class App extends Application {
             if (activityFeedArea != null) activityFeedArea.requestFocus();
         });
 
-        navMenu.getChildren().addAll(navTopology, navTable, navDispatch, navLogs);
+        navMenu.getChildren().addAll(navTopology, navTable, navTimeline, navDispatch, navLogs);
 
         // Live Mesh Health Monitor Widget
         VBox healthWidget = new VBox(8);
@@ -381,7 +404,7 @@ public class App extends Application {
             updateToggleState(dev);
         });
 
-        Tab topologyTab = new Tab("🗺️ Interactive Mesh Topology", topologyPane);
+        topologyTab = new Tab("🗺️ Interactive Mesh Topology", topologyPane);
 
         // Tab 2: Active Nodes Table
         deviceTable = new TableView<>();
@@ -483,8 +506,9 @@ public class App extends Application {
             }
         });
 
-        Tab tableTab = new Tab("📋 Device Telemetry Table", deviceTable);
-        networkTabPane.getTabs().addAll(topologyTab, tableTab);
+        tableTab = new Tab("📋 Device Telemetry Table", deviceTable);
+        timelineTab = new Tab("⏱️ Event Timeline & History", createTimelinePanel());
+        networkTabPane.getTabs().addAll(topologyTab, tableTab, timelineTab);
         viewCard.getChildren().add(networkTabPane);
 
         // Section B: Node Control Strip
@@ -664,7 +688,20 @@ public class App extends Application {
         resultBadge = new Label("WAITING FOR DISPATCH");
         resultBadge.setStyle("-fx-background-color: #1e293b; -fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px;");
 
-        outcomeStatusRow.getChildren().addAll(outcomeTitle, resultBadge);
+        Region outcomeSpacer = new Region();
+        HBox.setHgrow(outcomeSpacer, javafx.scene.layout.Priority.ALWAYS);
+
+        replayFromOutcomeBtn = new Button("🎬 Replay Transmission");
+        replayFromOutcomeBtn.setStyle("-fx-background-color: #0e223d; -fx-text-fill: #38bdf8; -fx-font-size: 11px; -fx-font-weight: bold; -fx-border-color: #0284c7; -fx-border-radius: 5px; -fx-padding: 3 9; -fx-cursor: hand;");
+        replayFromOutcomeBtn.setDisable(true);
+        replayFromOutcomeBtn.setOnAction(e -> {
+            if (!simulationHistory.isEmpty()) {
+                networkTabPane.getSelectionModel().select(topologyTab);
+                topologyPane.playReplay();
+            }
+        });
+
+        outcomeStatusRow.getChildren().addAll(outcomeTitle, resultBadge, outcomeSpacer, replayFromOutcomeBtn);
 
         // Breadcrumb Trail
         VBox routeSection = new VBox(6);
@@ -811,6 +848,25 @@ public class App extends Application {
             log("FAILED", String.format("[%s] Delivery failed. Reason: %s", msgId, result.explanation()));
         }
 
+        // Step 11: Timeline and Historical Recording
+        SimulationTimeline timeline = SimulationTimeline.fromSimulation(message, result);
+        SimulationRecord record = new SimulationRecord(message, result, timeline);
+        simulationHistory.add(0, record);
+
+        if (historyComboBox != null) {
+            historyComboBox.setValue(record);
+        }
+        currentTimelineEvents.setAll(timeline.getEvents());
+        updateTimelineDetails(record);
+
+        if (replayFromOutcomeBtn != null) {
+            replayFromOutcomeBtn.setDisable(false);
+        }
+
+        if (topologyPane != null) {
+            topologyPane.loadReplay(record);
+        }
+
         refreshUI();
     }
 
@@ -941,7 +997,11 @@ public class App extends Application {
             try {
                 // Clear previous simulation outcomes & route highlights prior to loading new config
                 if (topologyPane != null) {
+                    topologyPane.resetReplay();
                     topologyPane.clearRouteHighlight();
+                }
+                if (replayFromOutcomeBtn != null) {
+                    replayFromOutcomeBtn.setDisable(true);
                 }
                 renderEmptyRoute();
                 resultBadge.setText("WAITING FOR DISPATCH");
@@ -989,7 +1049,11 @@ public class App extends Application {
         messageCounter = 1;
 
         if (topologyPane != null) {
+            topologyPane.resetReplay();
             topologyPane.clearRouteHighlight();
+        }
+        if (replayFromOutcomeBtn != null) {
+            replayFromOutcomeBtn.setDisable(true);
         }
         renderEmptyRoute();
         resultBadge.setText("WAITING FOR DISPATCH");
@@ -1004,6 +1068,153 @@ public class App extends Application {
         refreshUI();
 
         log("SIMULATION", "Started new simulation session. All devices recharged to 100% and transmission counters reset.");
+    }
+
+    // --------------------------------------------------------------------------
+    // Step 11: Event Timeline & Simulation History Workspace
+    // --------------------------------------------------------------------------
+    private VBox createTimelinePanel() {
+        VBox container = new VBox(12);
+        container.setPadding(new Insets(12));
+        container.setStyle("-fx-background-color: #070c17; -fx-background-radius: 10px; -fx-border-color: #192742; -fx-border-radius: 10px;");
+        container.setPrefHeight(340);
+        container.setMinHeight(280);
+
+        // Header: History selection and replay trigger
+        HBox header = new HBox(12);
+        header.setAlignment(Pos.CENTER_LEFT);
+
+        Label selectLbl = new Label("Simulation Run:");
+        selectLbl.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 700;");
+
+        historyComboBox = new ComboBox<>();
+        historyComboBox.setItems(simulationHistory);
+        historyComboBox.setPrefWidth(340);
+        historyComboBox.setPromptText("No simulations recorded yet");
+        historyComboBox.setStyle("-fx-font-size: 11px; -fx-background-color: #0f172a; -fx-text-fill: #38bdf8;");
+
+        historyComboBox.valueProperty().addListener((obs, oldV, newV) -> {
+            if (newV != null) {
+                currentTimelineEvents.setAll(newV.getTimeline().getEvents());
+                updateTimelineDetails(newV);
+                if (topologyPane != null) {
+                    topologyPane.loadReplay(newV);
+                }
+            }
+        });
+
+        Button watchOnCanvasBtn = new Button("🎬 Watch Replay on Canvas");
+        watchOnCanvasBtn.setStyle("-fx-background-color: #0284c7; -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 5 12; -fx-background-radius: 6px; -fx-cursor: hand;");
+        watchOnCanvasBtn.setOnAction(e -> {
+            SimulationRecord sel = historyComboBox.getValue();
+            if (sel != null) {
+                networkTabPane.getSelectionModel().select(topologyTab);
+                topologyPane.playReplay();
+            } else {
+                showAlert("No Simulation Selected", "Please select a recorded simulation from the history dropdown.");
+            }
+        });
+
+        timelineSummaryLabel = new Label("Dispatched emergency transmissions will record discrete milestone events here.");
+        timelineSummaryLabel.setStyle("-fx-text-fill: #38bdf8; -fx-font-size: 11px; -fx-font-weight: 600;");
+
+        header.getChildren().addAll(selectLbl, historyComboBox, watchOnCanvasBtn, timelineSummaryLabel);
+
+        // TableView for Timeline Events
+        timelineTable = new TableView<>();
+        timelineTable.setItems(currentTimelineEvents);
+        timelineTable.setPlaceholder(new Label("No simulation events recorded yet. Dispatch an alert to populate the timeline."));
+        timelineTable.getStyleClass().add("device-table");
+        VBox.setVgrow(timelineTable, javafx.scene.layout.Priority.ALWAYS);
+
+        TableColumn<SimulationEvent, Integer> seqCol = new TableColumn<>("Step #");
+        seqCol.setPrefWidth(60);
+        seqCol.setCellValueFactory(new PropertyValueFactory<>("sequenceNumber"));
+
+        TableColumn<SimulationEvent, String> elapsedCol = new TableColumn<>("Time");
+        elapsedCol.setPrefWidth(80);
+        elapsedCol.setCellValueFactory(new PropertyValueFactory<>("formattedElapsed"));
+        elapsedCol.setStyle("-fx-alignment: center; -fx-font-family: monospace; -fx-text-fill: #22d3ee; -fx-font-weight: bold;");
+
+        TableColumn<SimulationEvent, String> timestampCol = new TableColumn<>("Timestamp");
+        timestampCol.setPrefWidth(95);
+        timestampCol.setCellValueFactory(new PropertyValueFactory<>("timestamp"));
+
+        TableColumn<SimulationEvent, String> typeCol = new TableColumn<>("Event Type");
+        typeCol.setPrefWidth(140);
+        typeCol.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getType().toString()));
+        typeCol.setCellFactory(col -> new TableCell<>() {
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("");
+                } else {
+                    setText(item);
+                    if (item.contains("Delivered")) {
+                        setStyle("-fx-text-fill: #34d399; -fx-font-weight: bold;");
+                    } else if (item.contains("Failed")) {
+                        setStyle("-fx-text-fill: #f87171; -fx-font-weight: bold;");
+                    } else if (item.contains("Forwarding")) {
+                        setStyle("-fx-text-fill: #06b6d4; -fx-font-weight: bold;");
+                    } else if (item.contains("Discovered")) {
+                        setStyle("-fx-text-fill: #a855f7; -fx-font-weight: bold;");
+                    } else {
+                        setStyle("-fx-text-fill: #38bdf8; -fx-font-weight: bold;");
+                    }
+                }
+            }
+        });
+
+        TableColumn<SimulationEvent, String> srcCol = new TableColumn<>("Source Node");
+        srcCol.setPrefWidth(140);
+        srcCol.setCellValueFactory(new PropertyValueFactory<>("sourceDeviceName"));
+
+        TableColumn<SimulationEvent, String> dstCol = new TableColumn<>("Target Node");
+        dstCol.setPrefWidth(140);
+        dstCol.setCellValueFactory(new PropertyValueFactory<>("targetDeviceName"));
+
+        TableColumn<SimulationEvent, String> descCol = new TableColumn<>("Narrative Telemetry & Reason");
+        descCol.setPrefWidth(380);
+        descCol.setCellValueFactory(new PropertyValueFactory<>("description"));
+
+        timelineTable.getColumns().add(seqCol);
+        timelineTable.getColumns().add(elapsedCol);
+        timelineTable.getColumns().add(timestampCol);
+        timelineTable.getColumns().add(typeCol);
+        timelineTable.getColumns().add(srcCol);
+        timelineTable.getColumns().add(dstCol);
+        timelineTable.getColumns().add(descCol);
+
+        eventDetailLabel = new Label("Select an event above to view detailed diagnostics.");
+        eventDetailLabel.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-style: italic;");
+
+        timelineTable.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
+            if (newV != null) {
+                eventDetailLabel.setText(String.format("Step %d (%s @ %s): %s",
+                        newV.getSequenceNumber(), newV.getFormattedElapsed(), newV.getTimestamp(), newV.getDescription()));
+            }
+        });
+
+        container.getChildren().addAll(header, timelineTable, eventDetailLabel);
+        return container;
+    }
+
+    private void updateTimelineDetails(SimulationRecord record) {
+        if (record == null) return;
+        boolean delivered = record.isDelivered();
+        timelineSummaryLabel.setText(String.format("[%s] Priority: %s | %s | %d Events (%d ms)",
+                record.getId(),
+                record.getMessage().getPriority(),
+                delivered ? "✔ DELIVERED (" + record.getHopCount() + " hops)" : "✖ FAILED",
+                record.getTimeline().size(),
+                record.getTimeline().getTotalDurationMs()));
+        if (delivered) {
+            timelineSummaryLabel.setStyle("-fx-text-fill: #34d399; -fx-font-size: 11px; -fx-font-weight: 700;");
+        } else {
+            timelineSummaryLabel.setStyle("-fx-text-fill: #f87171; -fx-font-size: 11px; -fx-font-weight: 700;");
+        }
     }
 
     // --------------------------------------------------------------------------

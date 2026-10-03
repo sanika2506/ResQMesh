@@ -7,6 +7,11 @@ import com.resqmesh.model.MedicalStation;
 import com.resqmesh.model.SecurityStation;
 import com.resqmesh.model.StudentPhone;
 import com.resqmesh.routing.NetworkGraph;
+import com.resqmesh.model.EmergencyMessage;
+import com.resqmesh.model.Priority;
+import com.resqmesh.simulation.SimulationResult;
+import com.resqmesh.simulation.timeline.SimulationRecord;
+import com.resqmesh.simulation.timeline.SimulationTimeline;
 import javafx.application.Platform;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -164,5 +169,50 @@ public class NetworkTopologyVisualTest {
         assertEquals(4, topologyPane.getLinkVisuals().size(), "Link count should increase to 4");
         assertTrue(topologyPane.isLinkHighlighted(alice, david) == false, "New link should exist and be unhighlighted by default");
         assertNotNull(topologyPane.getNodeVisual(david));
+    }
+
+    @Test
+    @DisplayName("Topology: Replay engine loads delivered simulation and positions message indicator")
+    void testReplayEngineInitializationAndLoadDelivered() {
+        assertNotNull(topologyPane.getMessageIndicator(), "Message indicator visual should be initialized");
+        assertNotNull(topologyPane.getReplayController(), "Replay controller should be initialized");
+
+        EmergencyMessage msg = new EmergencyMessage("MSG-1", alice, medical, "Test", Priority.NORMAL);
+        List<CommunicationDevice> route = Arrays.asList(alice, bob, security, medical);
+        SimulationResult result = SimulationResult.success("Delivered in 3 hops", route);
+        SimulationTimeline timeline = SimulationTimeline.fromSimulation(msg, result);
+        SimulationRecord record = new SimulationRecord(msg, result, timeline);
+
+        topologyPane.loadReplay(record);
+
+        assertEquals(record, topologyPane.getActiveReplayRecord());
+        assertTrue(topologyPane.getMessageIndicator().isVisible());
+        assertFalse(topologyPane.getMessageIndicator().isFailureMode());
+        assertTrue(topologyPane.getReplayStatusText().contains("Loaded"));
+        assertTrue(topologyPane.getReplayStatusText().contains("3 hops"));
+
+        // Speed configuration
+        topologyPane.setReplaySpeed(1.5);
+        assertEquals(1.5, topologyPane.getReplaySpeed(), 0.01);
+        assertEquals(1.5, topologyPane.getReplayController().getSpeedFactor(), 0.01);
+
+        topologyPane.resetReplay();
+        assertTrue(topologyPane.getReplayStatusText().contains("Reset"));
+    }
+
+    @Test
+    @DisplayName("Topology: Replay engine loads failed simulation with failure mode indicator")
+    void testReplayEngineLoadFailedDelivery() {
+        EmergencyMessage msg = new EmergencyMessage("MSG-FAIL", alice, medical, "Severed", Priority.NORMAL);
+        SimulationResult result = SimulationResult.failure("No valid route found");
+        SimulationTimeline timeline = SimulationTimeline.fromSimulation(msg, result);
+        SimulationRecord record = new SimulationRecord(msg, result, timeline);
+
+        topologyPane.loadReplay(record);
+
+        assertEquals(record, topologyPane.getActiveReplayRecord());
+        assertTrue(topologyPane.getMessageIndicator().isVisible());
+        assertTrue(topologyPane.getMessageIndicator().isFailureMode(), "Indicator must be in failure mode for failed delivery");
+        assertTrue(topologyPane.getReplayStatusText().contains("FAILED"));
     }
 }

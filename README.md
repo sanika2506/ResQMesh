@@ -3,10 +3,10 @@
 [![Java](https://img.shields.io/badge/Java-21%20LTS-orange.svg?logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![JavaFX](https://img.shields.io/badge/JavaFX-21.0.6-blue.svg?logo=java&logoColor=white)](https://openjfx.io/)
 [![Build Tool](https://img.shields.io/badge/Build-Maven%20Wrapper-red.svg?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
-[![Tests](https://img.shields.io/badge/JUnit%205-43%20Passed-brightgreen.svg?logo=junit5&logoColor=white)](https://junit.org/junit5/)
+[![Tests](https://img.shields.io/badge/JUnit%205-60%20Passed-brightgreen.svg?logo=junit5&logoColor=white)](https://junit.org/junit5/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-> **ResQMesh** is an offline peer-to-peer ad-hoc communication network simulator designed for disaster response scenarios where conventional cellular towers and internet backbones have failed. Built with modern Java, JavaFX, and clean Object-Oriented Architecture, it models multi-hop mesh message propagation, shortest-path BFS routing, battery drain telemetry, interactive visual network topology, and full JSON configuration persistence.
+> **ResQMesh** is an offline peer-to-peer ad-hoc communication network simulator designed for disaster response scenarios where conventional cellular towers and internet backbones have failed. Built with modern Java, JavaFX, and clean Object-Oriented Architecture, it models multi-hop mesh message propagation, shortest-path BFS routing, battery drain telemetry, interactive visual network topology, full JSON configuration persistence, step-by-step emergency simulation replay with animated packet indicators, and comprehensive event timeline auditing.
 
 ---
 
@@ -39,6 +39,19 @@
 
 ## 🌟 Core Features
 
+- **🎬 Emergency Simulation Replay & Animated Topology:**
+  - **Visual Route Replay:** Animates a glowing cyan packet indicator traveling hop-by-hop along the exact calculated BFS route across the network topology canvas.
+  - **Dynamic Playback Controls:** Fully interactive HUD control bar featuring **Play (▶)**, **Pause (⏸)**, **Resume**, and **Reset (↺)**.
+  - **Replay Speed Selector:** Adjustable transmission speed multipliers (`0.5x`, `1.0x`, `1.5x`, `2.0x`) for presentations and rapid debugging.
+  - **Failure Diagnosis Animation:** Unreachable routes and offline intermediate devices display a pulsating red warning indicator at the fault origin node without drawing false successful paths.
+  - **Non-Destructive Historical Review:** Replay and inspect previous simulation dispatches anytime without altering device battery levels or mutating current network state.
+
+- **⏱️ Event Timeline & Audit Log:**
+  - Dedicated **Event Timeline & History** dashboard tab with a comprehensive chronological audit table.
+  - Records granular milestones: `MESSAGE_CREATED`, `ROUTE_DISCOVERED`, `HOP_FORWARDING`, `MESSAGE_DELIVERED`, and `DELIVERY_FAILED`.
+  - Displays step numbering, simulation-relative elapsed times (`+0ms`, `+250ms`, `+750ms`), formatted wall-clock timestamps, and source/target device identifiers.
+  - Interactive history dropdown selector to switch between previous simulation runs on demand.
+
 - **🗺️ Interactive Visual Network Topology Canvas:**
   - Registered devices render as draggable circular nodes with classification icons (`📱 Student Phone`, `🛡️ Security Post`, `🏥 Medical Center`).
   - Active bidirectional peer-to-peer links dynamically follow nodes with line bindings in real-time.
@@ -69,7 +82,7 @@
   - One-click *Recharge (100%)* and *Toggle Online/Offline* controls for dynamic failure simulations.
 
 - **📊 Central Telemetry Table & Real-Time Activity Feed:**
-  - Tabbed interface switching between the interactive visual topology canvas and a detailed telemetry `TableView`.
+  - Tabbed interface switching between the interactive visual topology canvas, detailed telemetry `TableView`, and the chronological **Event Timeline**.
   - Live scrollable, timestamped terminal log tracking all dispatches, connection establishments, and node state transitions.
   - Top KPI cards displaying Total Devices, Network Health, Active Links, and Delivery Success Rate.
 
@@ -103,11 +116,18 @@ com.resqmesh/
 ├── simulation/           # Lifecycle & Simulation Coordination
 │   ├── SimulationEngine.java      [Facade / Controller: Coordinates routing & energy]
 │   ├── SimulationResult.java      [Immutable Record: Outcome, route, and diagnostics]
-│   └── SimulationDemo.java        [Console demonstration test runner]
+│   ├── SimulationDemo.java        [Console demonstration test runner]
+│   └── timeline/                  # Step 11: Event Timeline & Replay Engine
+│       ├── SimulationEventType.java   [Enum: Milestones for message lifecycle]
+│       ├── SimulationEvent.java       [Value Object: Step #, elapsed ms, narrative]
+│       ├── SimulationTimeline.java    [Ordered Event Sequence Generator]
+│       ├── SimulationRecord.java      [Historical Snapshot for non-destructive review]
+│       ├── ReplayState.java           [Enum: IDLE, PLAYING, PAUSED, COMPLETED, STOPPED]
+│       └── ReplayController.java      [Headless Replay State Machine & Speed Manager]
 │
 └── ui/                   # JavaFX Presentation Layer
     ├── App.java                   [Main Dashboard: BorderPane, cards, form handlers]
-    ├── NetworkTopologyPane.java   [Custom StackPane Canvas: NodeVisual, LinkVisual]
+    ├── NetworkTopologyPane.java   [Custom Canvas: NodeVisual, LinkVisual, MessageIndicatorVisual]
     └── Launcher.java              [CLI / IDE bootstrap companion]
 ```
 
@@ -120,9 +140,13 @@ com.resqmesh/
 3. **Encapsulation:**
    - Battery levels, statuses, and network links are shielded with private fields, invariant validation checks, and immutable collections where appropriate.
 4. **Single Responsibility Principle (SRP):**
-   - Graph maintenance is isolated in `NetworkGraph`, route calculation in `ShortestPathStrategy`, packet propagation and battery drain in `SimulationEngine`, serialization and schema validation in `NetworkConfigManager`, and rendering in `NetworkTopologyPane`.
+   - Graph maintenance is isolated in `NetworkGraph`, route calculation in `ShortestPathStrategy`, packet propagation and battery drain in `SimulationEngine`, serialization and schema validation in `NetworkConfigManager`, and timeline state transitions in `ReplayController`.
 5. **Data Transfer Object (DTO) Pattern:**
    - `NetworkConfigDTO` separates internal graph references and JavaFX visual state from the external JSON schema, ensuring clean serialization without leaking transient UI state.
+6. **State Machine & Headless Controller Pattern:**
+   - `ReplayController` decouples playback state management (`IDLE`, `PLAYING`, `PAUSED`, `COMPLETED`, `STOPPED`) and speed timing from JavaFX UI components, enabling fast, 100% headless automated testing.
+7. **Memento / Historical Record Pattern:**
+   - `SimulationRecord` stores an immutable snapshot of prior simulation outcomes, routes, and timelines, enabling non-destructive replay review without re-executing BFS or modifying device battery levels.
 
 ---
 
@@ -165,9 +189,16 @@ ResQMesh/
     │   │           ├── simulation/
     │   │           │   ├── SimulationDemo.java       # Standalone console simulation runner
     │   │           │   ├── SimulationEngine.java     # Engine managing hops and battery drain
-    │   │           │   └── SimulationResult.java     # Outcome record (delivered, route, reason)
+    │   │           │   ├── SimulationResult.java     # Outcome record (delivered, route, reason)
+    │   │           │   └── timeline/                 # Step 11: Event Timeline & Replay Engine
+    │   │           │       ├── ReplayController.java # State machine & playback speed controller
+    │   │           │       ├── ReplayState.java      # Replay lifecycle states enum
+    │   │           │       ├── SimulationEvent.java  # Individual event timeline record
+    │   │           │       ├── SimulationEventType.java # Event milestone types enum
+    │   │           │       ├── SimulationRecord.java # Historical snapshot for non-destructive review
+    │   │           │       └── SimulationTimeline.java # Chronological event sequence generator
     │   │           └── ui/
-    │   │               └── NetworkTopologyPane.java  # Interactive visual network topology canvas
+    │   │               └── NetworkTopologyPane.java  # Visual topology canvas with animated message indicator
     │   └── resources/
     │       ├── .gitkeep
     │       └── style.css                             # Dark cyber-command stylesheet
@@ -183,10 +214,13 @@ ResQMesh/
         │           │   ├── NetworkGraphTest.java                # Graph connections & link tests
         │           │   └── ShortestPathStrategyTest.java        # BFS pathfinding & constraint tests
         │           ├── simulation/
+        │           │   ├── EmergencyDeliveryIntegrationTest.java# End-to-end multi-hop delivery tests
         │           │   ├── SimulationEngineTest.java            # Engine delivery unit tests
-        │           │   └── EmergencyDeliveryIntegrationTest.java# End-to-end multi-hop delivery tests
+        │           │   └── timeline/
+        │           │       ├── ReplayControllerTest.java        # Replay state machine, speed & callback tests
+        │           │       └── SimulationTimelineTest.java      # Event ordering, relative time & immutability tests
         │           └── ui/
-        │               └── NetworkTopologyVisualTest.java       # Visual canvas & inspector tests
+        │               └── NetworkTopologyVisualTest.java       # Visual canvas, indicator & replay tests
         └── resources/
 ```
 
@@ -275,7 +309,7 @@ To run the standalone terminal demo without opening the GUI:
 
 ## 🧪 Automated Testing & Verification
 
-The project includes **43 comprehensive automated tests** across persistence, unit, algorithm, and UI visual integration layers:
+The project includes **60 comprehensive automated tests** across persistence, unit, algorithm, timeline replay, and UI visual integration layers:
 
 ```bash
 # Execute the full automated test suite
@@ -292,8 +326,10 @@ The project includes **43 comprehensive automated tests** across persistence, un
 | [`ShortestPathStrategyTest.java`](file:///src/test/java/com/resqmesh/routing/ShortestPathStrategyTest.java) | BFS shortest-path optimality, multi-hop routes, unreachable devices, and CRITICAL priority forwarding constraints | 6 | **PASSED** |
 | [`SimulationEngineTest.java`](file:///src/test/java/com/resqmesh/simulation/SimulationEngineTest.java) | Message delivery, energy deductions, offline sender/recipient handling, and null safety | 5 | **PASSED** |
 | [`EmergencyDeliveryIntegrationTest.java`](file:///src/test/java/com/resqmesh/simulation/EmergencyDeliveryIntegrationTest.java) | End-to-end Alice $\rightarrow$ Medical delivery, intermediate node offline failures, direct link bypass, multi-path BFS selection, and route reset | 7 | **PASSED** |
-| [`NetworkTopologyVisualTest.java`](file:///src/test/java/com/resqmesh/ui/NetworkTopologyVisualTest.java) | Node/link rendering, online/offline visual styles, HUD inspector telemetry, sequenced hop badges, and graph synchronization | 5 | **PASSED** |
-| **Total** | | **43** | **100% PASSED** |
+| [`SimulationTimelineTest.java`](file:///src/test/java/com/resqmesh/simulation/timeline/SimulationTimelineTest.java) | Step-by-step event ordering, elapsed millisecond progression, non-destructive history review, route consistency, and failed delivery timeline | 7 | **PASSED** |
+| [`ReplayControllerTest.java`](file:///src/test/java/com/resqmesh/simulation/timeline/ReplayControllerTest.java) | State transitions (IDLE, PLAYING, PAUSED, COMPLETED, RESET), speed adjustment factors, step listeners, and failure replay mechanics | 8 | **PASSED** |
+| [`NetworkTopologyVisualTest.java`](file:///src/test/java/com/resqmesh/ui/NetworkTopologyVisualTest.java) | Node/link rendering, online/offline styles, HUD inspector, hop badges, message indicator visual token, replay layer, and route animation loading | 7 | **PASSED** |
+| **Total** | | **60** | **100% PASSED** |
 
 ---
 

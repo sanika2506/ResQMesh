@@ -6,12 +6,23 @@ import com.resqmesh.model.DeviceStatus;
 import com.resqmesh.model.MedicalStation;
 import com.resqmesh.model.SecurityStation;
 import com.resqmesh.routing.NetworkGraph;
+import com.resqmesh.simulation.timeline.ReplayController;
+import com.resqmesh.simulation.timeline.ReplayState;
+import com.resqmesh.simulation.timeline.SimulationEvent;
+import com.resqmesh.simulation.timeline.SimulationEventType;
+import com.resqmesh.simulation.timeline.SimulationRecord;
 
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
+import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
 import javafx.scene.effect.DropShadow;
@@ -19,6 +30,7 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
+import javafx.util.Duration;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -26,12 +38,14 @@ import java.util.function.Consumer;
 /**
  * Interactive Visual Network Topology Pane for ResQMesh.
  * Step 8: Visual Network Graph Rendering & Route Highlighting.
+ * Step 11: Emergency Simulation Replay & Event Timeline Animation.
  * 
  * Features:
  * - Renders all registered devices as interactive draggable nodes.
  * - Renders all active bidirectional communication links.
  * - Distinct visual styles for ONLINE (green/cyan glow) vs OFFLINE (crimson/dimmed).
  * - Real-time BFS route illumination with glowing links and hop sequence numbers.
+ * - Message packet indicator gliding between nodes along BFS routes with Play, Pause, Resume, Reset, and Speed controls.
  * - On-node click inspector displaying device telemetry.
  * - Mouse drag-and-drop node repositioning with dynamic link tracking.
  */
@@ -41,6 +55,7 @@ public class NetworkTopologyPane extends StackPane {
     private final Pane canvasPane;
     private final Pane linkLayer;
     private final Pane nodeLayer;
+    private final Pane replayLayer;
     private final VBox inspectorCard;
 
     // Node and Link tracking
@@ -52,6 +67,21 @@ public class NetworkTopologyPane extends StackPane {
     private CommunicationDevice selectedDevice;
     private List<CommunicationDevice> activeRoute = Collections.emptyList();
     private Consumer<CommunicationDevice> deviceSelectionListener;
+
+    // Step 11: Replay Engine & Packet Indicator
+    private final MessageIndicatorVisual messageIndicator;
+    private final ReplayController replayController = new ReplayController();
+    private SimulationRecord activeReplayRecord;
+    private Timeline activeAnimationTimeline;
+    private double currentReplaySpeed = 1.0;
+
+    // Replay HUD Elements
+    private HBox replayBar;
+    private Label replayStatusLabel;
+    private Button playReplayBtn;
+    private Button pauseReplayBtn;
+    private Button resetReplayBtn;
+    private ComboBox<String> speedComboBox;
 
     // Inspector HUD elements
     private Label inspectorTitleLabel;
@@ -83,10 +113,16 @@ public class NetworkTopologyPane extends StackPane {
         canvasPane = new Pane();
         linkLayer = new Pane();
         nodeLayer = new Pane();
+        replayLayer = new Pane();
         linkLayer.setPickOnBounds(false);
         nodeLayer.setPickOnBounds(false);
+        replayLayer.setPickOnBounds(false);
 
-        canvasPane.getChildren().addAll(linkLayer, nodeLayer);
+        // Message packet indicator sits on replayLayer above nodes
+        messageIndicator = new MessageIndicatorVisual();
+        replayLayer.getChildren().add(messageIndicator);
+
+        canvasPane.getChildren().addAll(linkLayer, nodeLayer, replayLayer);
 
         // Mini HUD Inspector Card (top-right overlay)
         inspectorCard = createInspectorCard();
@@ -98,7 +134,12 @@ public class NetworkTopologyPane extends StackPane {
         StackPane.setAlignment(legendBox, Pos.TOP_LEFT);
         StackPane.setMargin(legendBox, new Insets(12));
 
-        getChildren().addAll(canvasPane, legendBox, inspectorCard);
+        // Replay HUD Controls (bottom-center overlay)
+        replayBar = createReplayBar();
+        StackPane.setAlignment(replayBar, Pos.BOTTOM_CENTER);
+        StackPane.setMargin(replayBar, new Insets(12));
+
+        getChildren().addAll(canvasPane, legendBox, inspectorCard, replayBar);
 
         // Reposition nodes smoothly when pane resizes
         widthProperty().addListener((obs, oldW, newW) -> relayoutNodes());
@@ -117,10 +158,13 @@ public class NetworkTopologyPane extends StackPane {
         linkVisuals.clear();
         linkLayer.getChildren().clear();
         nodeLayer.getChildren().clear();
+        replayLayer.getChildren().clear();
+        replayLayer.getChildren().add(messageIndicator);
 
         List<CommunicationDevice> devices = new ArrayList<>(graph.getAllDevices());
         if (devices.isEmpty()) {
             inspectorCard.setVisible(false);
+            messageIndicator.setVisible(false);
             return;
         }
 
@@ -227,6 +271,289 @@ public class NetworkTopologyPane extends StackPane {
         for (NodeVisual nv : deviceNodeMap.values()) {
             nv.setRouteHopIndex(-1);
         }
+    }
+
+    // --------------------------------------------------------------------------
+    // Replay Engine & Visual Timeline Animation (Step 11)
+    // --------------------------------------------------------------------------
+    public void loadReplay(SimulationRecord record) {
+        this.activeReplayRecord = record;
+        if (activeAnimationTimeline != null) {
+            activeAnimationTimeline.stop();
+        }
+
+        if (record == null) {
+            if (replayStatusLabel != null) {
+                replayStatusLabel.setText("No simulation loaded");
+            }
+            messageIndicator.setVisible(false);
+            return;
+        }
+
+        replayController.loadTimeline(record.getTimeline());
+        clearRouteHighlight();
+
+        if (record.isDelivered() && !record.getResult().getRoute().isEmpty()) {
+            CommunicationDevice startDev = record.getResult().getRoute().get(0);
+            NodeVisual startVis = deviceNodeMap.get(startDev);
+            if (startVis != null) {
+                messageIndicator.setFailureMode(false);
+                messageIndicator.setPosition(startVis.getX(), startVis.getY());
+                messageIndicator.setVisible(true);
+            }
+            int hops = Math.max(0, record.getResult().getRoute().size() - 1);
+            if (replayStatusLabel != null) {
+                replayStatusLabel.setText(String.format("Loaded: %s (%d hop%s). Ready to play.",
+                        record.getId(), hops, hops == 1 ? "" : "s"));
+            }
+        } else {
+            CommunicationDevice sender = record.getMessage().getSender();
+            NodeVisual senderVis = deviceNodeMap.get(sender);
+            if (senderVis != null) {
+                messageIndicator.setFailureMode(true);
+                messageIndicator.setPosition(senderVis.getX(), senderVis.getY());
+                messageIndicator.setVisible(true);
+            }
+            if (replayStatusLabel != null) {
+                replayStatusLabel.setText("Loaded: " + record.getId() + " [FAILED]. Ready to review.");
+            }
+        }
+        if (playReplayBtn != null) {
+            playReplayBtn.setText("▶ Play");
+        }
+    }
+
+    public void playReplay() {
+        if (activeReplayRecord == null) {
+            if (replayStatusLabel != null) {
+                replayStatusLabel.setText("No simulation loaded to replay");
+            }
+            return;
+        }
+
+        if (activeAnimationTimeline != null && activeAnimationTimeline.getStatus() == Animation.Status.PAUSED) {
+            activeAnimationTimeline.play();
+            replayController.resume();
+            if (replayStatusLabel != null) {
+                replayStatusLabel.setText("Resumed replay...");
+            }
+            if (playReplayBtn != null) {
+                playReplayBtn.setText("▶ Playing");
+            }
+            return;
+        }
+
+        if (!activeReplayRecord.isDelivered()) {
+            replayController.play();
+            startFailureAnimation(activeReplayRecord);
+            return;
+        }
+
+        List<CommunicationDevice> route = activeReplayRecord.getResult().getRoute();
+        if (route == null || route.isEmpty()) {
+            return;
+        }
+
+        replayController.play();
+        startRouteAnimation(route);
+    }
+
+    private void startRouteAnimation(List<CommunicationDevice> route) {
+        if (activeAnimationTimeline != null) {
+            activeAnimationTimeline.stop();
+        }
+
+        clearRouteHighlight();
+        messageIndicator.setFailureMode(false);
+
+        NodeVisual startVis = deviceNodeMap.get(route.get(0));
+        if (startVis == null) return;
+
+        messageIndicator.setPosition(startVis.getX(), startVis.getY());
+        messageIndicator.setVisible(true);
+        startVis.setRouteHopIndex(1);
+
+        activeAnimationTimeline = new Timeline();
+        if (playReplayBtn != null) {
+            playReplayBtn.setText("▶ Playing");
+        }
+
+        double baseHopDurationMs = 800.0;
+        double currentDelayMs = 200.0;
+
+        for (int i = 0; i < route.size() - 1; i++) {
+            final int hopIndex = i;
+            CommunicationDevice fromDev = route.get(hopIndex);
+            CommunicationDevice toDev = route.get(hopIndex + 1);
+            NodeVisual fromVis = deviceNodeMap.get(fromDev);
+            NodeVisual toVis = deviceNodeMap.get(toDev);
+            if (fromVis == null || toVis == null) continue;
+
+            activeAnimationTimeline.getKeyFrames().add(new KeyFrame(
+                    Duration.millis(currentDelayMs),
+                    e -> {
+                        for (LinkVisual lv : linkVisuals) {
+                            if (lv.connects(fromDev, toDev)) {
+                                lv.setHighlighted(true);
+                            }
+                        }
+                        if (replayStatusLabel != null) {
+                            replayStatusLabel.setText(String.format("Relaying: %s ──▶ %s (Hop %d/%d)",
+                                    fromDev.getName(), toDev.getName(), hopIndex + 1, route.size() - 1));
+                        }
+                    }
+            ));
+
+            double nextDelayMs = currentDelayMs + baseHopDurationMs;
+
+            activeAnimationTimeline.getKeyFrames().add(new KeyFrame(
+                    Duration.millis(nextDelayMs),
+                    new KeyValue(messageIndicator.layoutXProperty(), toVis.getX() - 14),
+                    new KeyValue(messageIndicator.layoutYProperty(), toVis.getY() - 14)
+            ));
+
+            activeAnimationTimeline.getKeyFrames().add(new KeyFrame(
+                    Duration.millis(nextDelayMs),
+                    e -> {
+                        toVis.setRouteHopIndex(hopIndex + 2);
+                        replayController.stepNext();
+                    }
+            ));
+
+            currentDelayMs = nextDelayMs + 200.0;
+        }
+
+        activeAnimationTimeline.getKeyFrames().add(new KeyFrame(
+                Duration.millis(currentDelayMs),
+                e -> {
+                    if (replayStatusLabel != null) {
+                        replayStatusLabel.setText("✔ Replay Complete: Delivered to " + route.get(route.size() - 1).getName());
+                    }
+                    if (playReplayBtn != null) {
+                        playReplayBtn.setText("▶ Replay");
+                    }
+                }
+        ));
+
+        activeAnimationTimeline.setRate(currentReplaySpeed);
+        activeAnimationTimeline.playFromStart();
+    }
+
+    private void startFailureAnimation(SimulationRecord record) {
+        if (activeAnimationTimeline != null) {
+            activeAnimationTimeline.stop();
+        }
+        clearRouteHighlight();
+
+        CommunicationDevice sender = record.getMessage().getSender();
+        NodeVisual senderVis = deviceNodeMap.get(sender);
+        if (senderVis != null) {
+            messageIndicator.setFailureMode(true);
+            messageIndicator.setPosition(senderVis.getX(), senderVis.getY());
+            messageIndicator.setVisible(true);
+        }
+
+        if (replayStatusLabel != null) {
+            replayStatusLabel.setText("✖ FAILED: " + record.getResult().getExplanation());
+        }
+
+        activeAnimationTimeline = new Timeline(
+                new KeyFrame(Duration.ZERO, new KeyValue(messageIndicator.scaleXProperty(), 1.0), new KeyValue(messageIndicator.scaleYProperty(), 1.0)),
+                new KeyFrame(Duration.millis(250), new KeyValue(messageIndicator.scaleXProperty(), 1.6), new KeyValue(messageIndicator.scaleYProperty(), 1.6)),
+                new KeyFrame(Duration.millis(500), new KeyValue(messageIndicator.scaleXProperty(), 1.0), new KeyValue(messageIndicator.scaleYProperty(), 1.0)),
+                new KeyFrame(Duration.millis(750), new KeyValue(messageIndicator.scaleXProperty(), 1.6), new KeyValue(messageIndicator.scaleYProperty(), 1.6)),
+                new KeyFrame(Duration.millis(1000), new KeyValue(messageIndicator.scaleXProperty(), 1.0), new KeyValue(messageIndicator.scaleYProperty(), 1.0))
+        );
+        activeAnimationTimeline.setRate(currentReplaySpeed);
+        activeAnimationTimeline.playFromStart();
+    }
+
+    public void pauseReplay() {
+        if (activeAnimationTimeline != null && activeAnimationTimeline.getStatus() == Animation.Status.RUNNING) {
+            activeAnimationTimeline.pause();
+            replayController.pause();
+            if (replayStatusLabel != null) {
+                replayStatusLabel.setText("⏸ Replay Paused");
+            }
+            if (playReplayBtn != null) {
+                playReplayBtn.setText("▶ Resume");
+            }
+        }
+    }
+
+    public void resumeReplay() {
+        playReplay();
+    }
+
+    public void resetReplay() {
+        if (activeAnimationTimeline != null) {
+            activeAnimationTimeline.stop();
+        }
+        replayController.reset();
+        clearRouteHighlight();
+
+        if (activeReplayRecord != null) {
+            if (activeReplayRecord.isDelivered() && !activeReplayRecord.getResult().getRoute().isEmpty()) {
+                CommunicationDevice startDev = activeReplayRecord.getResult().getRoute().get(0);
+                NodeVisual startVis = deviceNodeMap.get(startDev);
+                if (startVis != null) {
+                    messageIndicator.setFailureMode(false);
+                    messageIndicator.setPosition(startVis.getX(), startVis.getY());
+                    messageIndicator.setVisible(true);
+                }
+            } else {
+                CommunicationDevice sender = activeReplayRecord.getMessage().getSender();
+                NodeVisual senderVis = deviceNodeMap.get(sender);
+                if (senderVis != null) {
+                    messageIndicator.setFailureMode(true);
+                    messageIndicator.setPosition(senderVis.getX(), senderVis.getY());
+                    messageIndicator.setVisible(true);
+                }
+            }
+            if (replayStatusLabel != null) {
+                replayStatusLabel.setText("Replay Reset: Ready to play");
+            }
+        } else {
+            messageIndicator.setVisible(false);
+            if (replayStatusLabel != null) {
+                replayStatusLabel.setText("Ready");
+            }
+        }
+        if (playReplayBtn != null) {
+            playReplayBtn.setText("▶ Play");
+        }
+    }
+
+    public void setReplaySpeed(double speed) {
+        this.currentReplaySpeed = speed;
+        replayController.setSpeed(speed);
+        if (activeAnimationTimeline != null) {
+            activeAnimationTimeline.setRate(speed);
+        }
+    }
+
+    public MessageIndicatorVisual getMessageIndicator() {
+        return messageIndicator;
+    }
+
+    public ReplayController getReplayController() {
+        return replayController;
+    }
+
+    public SimulationRecord getActiveReplayRecord() {
+        return activeReplayRecord;
+    }
+
+    public String getReplayStatusText() {
+        return (replayStatusLabel != null) ? replayStatusLabel.getText() : "";
+    }
+
+    public double getReplaySpeed() {
+        return currentReplaySpeed;
+    }
+
+    public Timeline getActiveAnimationTimeline() {
+        return activeAnimationTimeline;
     }
 
     public List<CommunicationDevice> getActiveRoute() {
@@ -468,6 +795,47 @@ public class NetworkTopologyPane extends StackPane {
         return legend;
     }
 
+    private HBox createReplayBar() {
+        HBox bar = new HBox(8);
+        bar.setAlignment(Pos.CENTER);
+        bar.setStyle("-fx-background-color: rgba(10, 16, 29, 0.94); -fx-background-radius: 8px; -fx-border-color: #1e3a5f; -fx-border-radius: 8px; -fx-padding: 6px 14px; -fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.6), 8, 0, 0, 2);");
+
+        Label title = new Label("🎬 REPLAY:");
+        title.setStyle("-fx-font-size: 10px; -fx-font-weight: 800; -fx-text-fill: #38bdf8;");
+
+        replayStatusLabel = new Label("Ready (No simulation loaded)");
+        replayStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #94a3b8; -fx-font-weight: 600;");
+        replayStatusLabel.setMaxWidth(260);
+
+        playReplayBtn = new Button("▶ Play");
+        playReplayBtn.setStyle("-fx-background-color: #0284c7; -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 4 10; -fx-background-radius: 5px; -fx-cursor: hand;");
+        playReplayBtn.setOnAction(e -> playReplay());
+
+        pauseReplayBtn = new Button("⏸ Pause");
+        pauseReplayBtn.setStyle("-fx-background-color: #1e293b; -fx-text-fill: #cbd5e1; -fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 4 10; -fx-background-radius: 5px; -fx-cursor: hand;");
+        pauseReplayBtn.setOnAction(e -> pauseReplay());
+
+        resetReplayBtn = new Button("↺ Reset");
+        resetReplayBtn.setStyle("-fx-background-color: #1e293b; -fx-text-fill: #cbd5e1; -fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 4 10; -fx-background-radius: 5px; -fx-cursor: hand;");
+        resetReplayBtn.setOnAction(e -> resetReplay());
+
+        speedComboBox = new ComboBox<>();
+        speedComboBox.getItems().addAll("0.5x", "1.0x", "1.5x", "2.0x");
+        speedComboBox.setValue("1.0x");
+        speedComboBox.setStyle("-fx-font-size: 10px; -fx-background-color: #0f172a; -fx-text-fill: #38bdf8; -fx-border-color: #1e293b; -fx-border-radius: 4px;");
+        speedComboBox.setOnAction(e -> {
+            String val = speedComboBox.getValue();
+            double speed = 1.0;
+            if ("0.5x".equals(val)) speed = 0.5;
+            else if ("1.5x".equals(val)) speed = 1.5;
+            else if ("2.0x".equals(val)) speed = 2.0;
+            setReplaySpeed(speed);
+        });
+
+        bar.getChildren().addAll(title, replayStatusLabel, playReplayBtn, pauseReplayBtn, resetReplayBtn, speedComboBox);
+        return bar;
+    }
+
     // --------------------------------------------------------------------------
     // Visual Node Component (Circle + Icon + Label + Halo)
     // --------------------------------------------------------------------------
@@ -658,5 +1026,59 @@ public class NetworkTopologyPane extends StackPane {
         public boolean isHighlighted() { return highlighted; }
         public CommunicationDevice getDevA() { return devA; }
         public CommunicationDevice getDevB() { return devB; }
+    }
+
+    // --------------------------------------------------------------------------
+    // Animated Message Packet Indicator (Step 11)
+    // --------------------------------------------------------------------------
+    public static class MessageIndicatorVisual extends StackPane {
+        private final Circle outerGlow;
+        private final Circle coreCircle;
+        private final Label iconLabel;
+        private boolean failureMode = false;
+
+        public MessageIndicatorVisual() {
+            outerGlow = new Circle(14);
+            outerGlow.setFill(Color.web("#06b6d4", 0.35));
+
+            coreCircle = new Circle(10);
+            coreCircle.setFill(Color.web("#06b6d4"));
+            coreCircle.setStroke(Color.web("#22d3ee"));
+            coreCircle.setStrokeWidth(1.5);
+            coreCircle.setEffect(new DropShadow(12, Color.web("#22d3ee")));
+
+            iconLabel = new Label("📨");
+            iconLabel.setStyle("-fx-font-size: 10px;");
+
+            getChildren().addAll(outerGlow, coreCircle, iconLabel);
+            setMouseTransparent(true);
+            setVisible(false);
+        }
+
+        public void setFailureMode(boolean failure) {
+            this.failureMode = failure;
+            if (failure) {
+                outerGlow.setFill(Color.web("#f43f5e", 0.40));
+                coreCircle.setFill(Color.web("#e11d48"));
+                coreCircle.setStroke(Color.web("#fecdd3"));
+                coreCircle.setEffect(new DropShadow(14, Color.web("#f43f5e")));
+                iconLabel.setText("✖");
+            } else {
+                outerGlow.setFill(Color.web("#06b6d4", 0.35));
+                coreCircle.setFill(Color.web("#06b6d4"));
+                coreCircle.setStroke(Color.web("#22d3ee"));
+                coreCircle.setEffect(new DropShadow(12, Color.web("#22d3ee")));
+                iconLabel.setText("📨");
+            }
+        }
+
+        public boolean isFailureMode() {
+            return failureMode;
+        }
+
+        public void setPosition(double x, double y) {
+            setLayoutX(x - 14);
+            setLayoutY(y - 14);
+        }
     }
 }
