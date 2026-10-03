@@ -1,0 +1,95 @@
+{
+  "name": "Campus Emergency Disaster Mesh",
+  "version": "1.0",
+  "savedAt": "2026-10-04T02:00:00",
+  "devices": [
+    {
+      "id": "DEV-1",
+      "name": "Alice's Phone",
+      "type": "STUDENT_PHONE",
+      "batteryLevel": 95.0,
+      "status": "ACTIVE",
+      "location": {
+        "x": 15.0,
+        "y": 20.0
+      }
+    },
+    {
+      "id": "DEV-2",
+      "name": "Bob's Phone",
+      "type": "STUDENT_PHONE",
+      "batteryLevel": 88.0,
+      "status": "ACTIVE",
+      "location": {
+        "x": 35.0,
+        "y": 30.0
+      }
+    },
+    {
+      "id": "SEC-1",
+      "name": "North Perimeter Security Post",
+      "type": "SECURITY_STATION",
+      "batteryLevel": 100.0,
+      "status": "ACTIVE",
+      "location": {
+        "x": 55.0,
+        "y": 45.0
+      }
+    },
+    {
+      "id": "MED-1",
+      "name": "Central Field Hospital",
+      "type": "MEDICAL_STATION",
+      "batteryLevel": 100.0,
+      "status": "ACTIVE",
+      "location": {
+        "x": 75.0,
+        "y": 60.0
+      }
+    },
+    {
+      "id": "SEC-2",
+      "name": "South Gate Security Hub",
+      "type": "SECURITY_STATION",
+      "batteryLevel": 90.0,
+      "status": "ACTIVE",
+      "location": {
+        "x": 55.0,
+        "y": 75.0
+      }
+    },
+    {
+      "id": "DEV-3",
+      "name": "Charlie's Phone (Disconnected)",
+      "type": "STUDENT_PHONE",
+      "batteryLevel": 45.0,
+      "status": "OFFLINE",
+      "location": {
+        "x": 90.0,
+        "y": 20.0
+      }
+    }
+  ],
+  "connections": [
+    {
+      "nodeA": "DEV-1",
+      "nodeB": "DEV-2"
+    },
+    {
+      "nodeA": "DEV-2",
+      "nodeB": "SEC-1"
+    },
+    {
+      "nodeA": "SEC-1",
+      "nodeB": "MED-1"
+    },
+    {
+      "nodeA": "DEV-2",
+      "nodeB": "SEC-2"
+    },
+    {
+      "nodeA": "SEC-2",
+      "nodeB": "MED-1"
+    }
+  ]
+}

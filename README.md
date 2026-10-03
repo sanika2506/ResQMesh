@@ -3,10 +3,10 @@
 [![Java](https://img.shields.io/badge/Java-21%20LTS-orange.svg?logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![JavaFX](https://img.shields.io/badge/JavaFX-21.0.6-blue.svg?logo=java&logoColor=white)](https://openjfx.io/)
 [![Build Tool](https://img.shields.io/badge/Build-Maven%20Wrapper-red.svg?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
-[![Tests](https://img.shields.io/badge/JUnit%205-33%20Passed-brightgreen.svg?logo=junit5&logoColor=white)](https://junit.org/junit5/)
+[![Tests](https://img.shields.io/badge/JUnit%205-43%20Passed-brightgreen.svg?logo=junit5&logoColor=white)](https://junit.org/junit5/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-> **ResQMesh** is an offline peer-to-peer ad-hoc communication network simulator designed for disaster response scenarios where conventional cellular towers and internet backbones have failed. Built with modern Java, JavaFX, and clean Object-Oriented Architecture, it models multi-hop mesh message propagation, shortest-path BFS routing, battery drain telemetry, and real-time visual network topology inspection.
+> **ResQMesh** is an offline peer-to-peer ad-hoc communication network simulator designed for disaster response scenarios where conventional cellular towers and internet backbones have failed. Built with modern Java, JavaFX, and clean Object-Oriented Architecture, it models multi-hop mesh message propagation, shortest-path BFS routing, battery drain telemetry, interactive visual network topology, and full JSON configuration persistence.
 
 ---
 
@@ -22,10 +22,10 @@
 | • 🚀 Dispatch Alert               |                    │ (glow)                                         |
 | • 📜 Terminal Logs                |         [ 📱 Bob's Phone (#2 HOP) ]                                 |
 |                                   |                    │ (glow)                                         |
-| SYSTEM TELEMETRY                  |         [ 🛡️ Security Post (#3 HOP) ]       [ 📱 Charlie (OFFLINE) ] |
-| • Active Nodes: 4 / 5             |                    │ (glow)                                         |
-| • Routing: BFS Shortest Path      |         [ 🏥 Medical Center (#4 RECIPIENT) ]                        |
-| • Energy Drain: -2.0% / hop       |                                                                     |
+| CONFIGURATION & ACTIONS           |         [ 🛡️ Security Post (#3 HOP) ]       [ 📱 Charlie (OFFLINE) ] |
+| • 💾 Save Network (JSON)          |                    │ (glow)                                         |
+| • 📂 Load Network (JSON)          |         [ 🏥 Medical Center (#4 RECIPIENT) ]                        |
+| • ✨ New Simulation               |                                                                     |
 |                                   |  [ Top-Right HUD Inspector: Live Device Telemetry & Battery ]        |
 +-----------------------------------+---------------------------------------------------------------------+
 | QUICK NODE CONTROLS               | 🚀 EMERGENCY DISPATCH & REAL-TIME PROPAGATION                       |
@@ -45,6 +45,12 @@
   - Distinct visual styling for **ONLINE** (`🟢` emerald border, 100% opacity) vs. **OFFLINE** (`🔴` dashed red border, dimmed opacity).
   - Floating **Node Inspector HUD** displays real-time telemetry (ID, battery health bar, operational state, peer links) on node selection.
   - Smooth radial/circular distribution algorithm with mouse drag-and-drop repositioning.
+
+- **💾 Network Configuration Persistence (Save & Load):**
+  - **Save Network:** Export the active network topology (device IDs, names, types, battery levels, online/offline status, 2D coordinates, and mesh connections) into formatted, human-readable JSON.
+  - **Load Network:** Restore saved mesh configurations instantly with atomic state clearance (prevents ghost links or stale devices).
+  - **Strict Validation:** Guards against malformed JSON, duplicate device IDs, missing nodes, self-connections, out-of-range battery values, and invalid device types.
+  - **New Simulation:** One-click session reset that clears hop traces, refreshes counters, and restores device batteries.
 
 - **⚡ Real-Time BFS Route Illumination:**
   - When an emergency message is dispatched, the shortest path computed via Breadcrumb BFS illuminates immediately across the network.
@@ -89,6 +95,11 @@ com.resqmesh/
 │   ├── RoutingStrategy.java       [Strategy Pattern Interface: findRoute()]
 │   └── ShortestPathStrategy.java  [Concrete Strategy: Breadcrumb BFS Algorithm]
 │
+├── config/               # Persistence & Serialization (Step 10)
+│   ├── NetworkConfigManager.java  [Manager: JSON export, import, parsing, validation]
+│   ├── NetworkConfigDTO.java      [DTO Hierarchy: Network, Device, Location, Link]
+│   └── ConfigurationException.java[Checked Exception: Validation & I/O errors]
+│
 ├── simulation/           # Lifecycle & Simulation Coordination
 │   ├── SimulationEngine.java      [Facade / Controller: Coordinates routing & energy]
 │   ├── SimulationResult.java      [Immutable Record: Outcome, route, and diagnostics]
@@ -109,7 +120,9 @@ com.resqmesh/
 3. **Encapsulation:**
    - Battery levels, statuses, and network links are shielded with private fields, invariant validation checks, and immutable collections where appropriate.
 4. **Single Responsibility Principle (SRP):**
-   - Graph maintenance is isolated in `NetworkGraph`, route calculation in `ShortestPathStrategy`, packet propagation and battery drain in `SimulationEngine`, and rendering in `NetworkTopologyPane`.
+   - Graph maintenance is isolated in `NetworkGraph`, route calculation in `ShortestPathStrategy`, packet propagation and battery drain in `SimulationEngine`, serialization and schema validation in `NetworkConfigManager`, and rendering in `NetworkTopologyPane`.
+5. **Data Transfer Object (DTO) Pattern:**
+   - `NetworkConfigDTO` separates internal graph references and JavaFX visual state from the external JSON schema, ensuring clean serialization without leaking transient UI state.
 
 ---
 
@@ -117,10 +130,12 @@ com.resqmesh/
 
 ```text
 ResQMesh/
-├── pom.xml                                           # Maven configuration (Java 17/21, JavaFX 21, Surefire)
+├── pom.xml                                           # Maven configuration (Java 17/21, JavaFX 21, Gson 2.11)
 ├── .gitignore                                        # Excludes target/, IDE metadata (.idea, .vscode)
 ├── mvnw & mvnw.cmd                                   # Standalone Maven wrapper scripts
 ├── README.md                                         # Portfolio documentation and user guide
+├── samples/                                          # Bundled disaster mesh topology configurations
+│   └── campus_disaster_mesh.json                     # 6-node, 5-link multi-hop disaster network
 └── src/
     ├── main/
     │   ├── java/
@@ -128,6 +143,10 @@ ResQMesh/
     │   │       └── resqmesh/
     │   │           ├── App.java                      # Main JavaFX dashboard application
     │   │           ├── Launcher.java                 # Non-modular execution bootstrap
+    │   │           ├── config/
+    │   │           │   ├── ConfigurationException.java# Custom checked validation exception
+    │   │           │   ├── NetworkConfigDTO.java     # Serialization Data Transfer Objects
+    │   │           │   └── NetworkConfigManager.java # JSON save, load, and schema validator
     │   │           ├── model/
     │   │           │   ├── CommunicationDevice.java  # Abstract base communication node
     │   │           │   ├── CommunicationLink.java    # Directed communication link
@@ -156,6 +175,8 @@ ResQMesh/
         ├── java/
         │   └── com/
         │       └── resqmesh/
+        │           ├── config/
+        │           │   └── NetworkConfigManagerTest.java        # Save, load, schema validation, state purge tests
         │           ├── model/
         │           │   └── DeviceModelTest.java                 # Device status and battery tests
         │           ├── routing/
@@ -168,6 +189,47 @@ ResQMesh/
         │               └── NetworkTopologyVisualTest.java       # Visual canvas & inspector tests
         └── resources/
 ```
+
+---
+
+## 💾 Network Configuration JSON Schema
+
+ResQMesh uses a clean, portable JSON format to export and import network topologies. Users can load pre-configured scenarios or create custom disaster models:
+
+```json
+{
+  "version": "1.0",
+  "name": "Campus Disaster Response Mesh",
+  "devices": [
+    {
+      "id": "1",
+      "name": "Alice's Phone",
+      "type": "StudentPhone",
+      "batteryLevel": 100.0,
+      "status": "ACTIVE",
+      "location": { "x": 100.0, "y": 200.0 }
+    },
+    {
+      "id": "4",
+      "name": "Medical Center",
+      "type": "MedicalStation",
+      "batteryLevel": 98.0,
+      "status": "ACTIVE",
+      "location": { "x": 500.0, "y": 200.0 }
+    }
+  ],
+  "connections": [
+    { "sourceId": "1", "targetId": "2" },
+    { "sourceId": "2", "targetId": "4" }
+  ]
+}
+```
+
+- **Validation Rules:**
+  - `devices` must be non-empty and have unique IDs.
+  - `batteryLevel` must be within $[0.0, 100.0]$.
+  - `type` must be one of `StudentPhone`, `SecurityStation`, or `MedicalStation`.
+  - `connections` source and target must point to valid registered devices, and self-loops (`sourceId == targetId`) are rejected.
 
 ---
 
@@ -213,7 +275,7 @@ To run the standalone terminal demo without opening the GUI:
 
 ## 🧪 Automated Testing & Verification
 
-The project includes **33 comprehensive automated tests** across unit, algorithm, and UI visual integration layers:
+The project includes **43 comprehensive automated tests** across persistence, unit, algorithm, and UI visual integration layers:
 
 ```bash
 # Execute the full automated test suite
@@ -224,13 +286,14 @@ The project includes **33 comprehensive automated tests** across unit, algorithm
 
 | Test Class | Scope | Tests | Status |
 | :--- | :--- | :---: | :---: |
+| [`NetworkConfigManagerTest.java`](file:///src/test/java/com/resqmesh/config/NetworkConfigManagerTest.java) | Round-trip save/load, routing restoration, state wipe isolation, syntax errors, duplicate IDs, self-loops, and missing targets | 10 | **PASSED** |
 | [`DeviceModelTest.java`](file:///src/test/java/com/resqmesh/model/DeviceModelTest.java) | Device creation, battery consumption, low-battery thresholds, and status auto-transitions | 5 | **PASSED** |
 | [`NetworkGraphTest.java`](file:///src/test/java/com/resqmesh/routing/NetworkGraphTest.java) | Node registration, bidirectional connections, duplicate prevention, and link counting | 5 | **PASSED** |
 | [`ShortestPathStrategyTest.java`](file:///src/test/java/com/resqmesh/routing/ShortestPathStrategyTest.java) | BFS shortest-path optimality, multi-hop routes, unreachable devices, and CRITICAL priority forwarding constraints | 6 | **PASSED** |
 | [`SimulationEngineTest.java`](file:///src/test/java/com/resqmesh/simulation/SimulationEngineTest.java) | Message delivery, energy deductions, offline sender/recipient handling, and null safety | 5 | **PASSED** |
 | [`EmergencyDeliveryIntegrationTest.java`](file:///src/test/java/com/resqmesh/simulation/EmergencyDeliveryIntegrationTest.java) | End-to-end Alice $\rightarrow$ Medical delivery, intermediate node offline failures, direct link bypass, multi-path BFS selection, and route reset | 7 | **PASSED** |
 | [`NetworkTopologyVisualTest.java`](file:///src/test/java/com/resqmesh/ui/NetworkTopologyVisualTest.java) | Node/link rendering, online/offline visual styles, HUD inspector telemetry, sequenced hop badges, and graph synchronization | 5 | **PASSED** |
-| **Total** | | **33** | **100% PASSED** |
+| **Total** | | **43** | **100% PASSED** |
 
 ---
 

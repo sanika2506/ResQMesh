@@ -1,5 +1,7 @@
 package com.resqmesh;
 
+import com.resqmesh.config.ConfigurationException;
+import com.resqmesh.config.NetworkConfigManager;
 import com.resqmesh.model.CommunicationDevice;
 import com.resqmesh.model.DeviceStatus;
 import com.resqmesh.model.EmergencyMessage;
@@ -23,9 +25,11 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
 
+import java.io.File;
 import java.net.URL;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -236,10 +240,25 @@ public class App extends Application {
 
         healthWidget.getChildren().addAll(healthTitle, sidebarActiveNodesCountLabel, sidebarLinksCountLabel, routingEngineLabel, energyRuleLabel);
 
-        // Quick Topology Actions
+        // Topology & Configuration Actions
         VBox actionsBox = new VBox(8);
-        Label actionsTitle = new Label("TOPOLOGY CONTROLS");
-        actionsTitle.setStyle("-fx-font-size: 10px; -fx-font-weight: 800; -fx-text-fill: #64748b;");
+        Label actionsTitle = new Label("CONFIGURATION & ACTIONS");
+        actionsTitle.setStyle("-fx-font-size: 10px; -fx-font-weight: 800; -fx-text-fill: #38bdf8;");
+
+        Button saveBtn = new Button("💾 Save Network (JSON)");
+        saveBtn.setMaxWidth(Double.MAX_VALUE);
+        saveBtn.getStyleClass().add("btn-ghost");
+        saveBtn.setOnAction(e -> handleSaveNetwork());
+
+        Button loadBtn = new Button("📂 Load Network (JSON)");
+        loadBtn.setMaxWidth(Double.MAX_VALUE);
+        loadBtn.getStyleClass().add("btn-ghost");
+        loadBtn.setOnAction(e -> handleLoadNetwork());
+
+        Button newSimBtn = new Button("✨ New Simulation");
+        newSimBtn.setMaxWidth(Double.MAX_VALUE);
+        newSimBtn.setStyle("-fx-background-color: #0e223d; -fx-text-fill: #38bdf8; -fx-font-size: 12px; -fx-font-weight: bold; -fx-background-radius: 6px; -fx-cursor: hand; -fx-padding: 7 12; -fx-border-color: #0284c7; -fx-border-radius: 6px;");
+        newSimBtn.setOnAction(e -> handleNewSimulation());
 
         Button resetBtn = new Button("↺ Reset Sample Mesh");
         resetBtn.setMaxWidth(Double.MAX_VALUE);
@@ -258,7 +277,7 @@ public class App extends Application {
             log("TOPOLOGY", "Network graph cleared. All devices and links removed.");
         });
 
-        actionsBox.getChildren().addAll(actionsTitle, resetBtn, clearBtn);
+        actionsBox.getChildren().addAll(actionsTitle, saveBtn, loadBtn, newSimBtn, resetBtn, clearBtn);
 
         Region spacer = new Region();
         VBox.setVgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
@@ -883,7 +902,111 @@ public class App extends Application {
     }
 
     // --------------------------------------------------------------------------
-    // 6. Helpers & Utilities
+    // 6. Network Configuration Persistence & Simulation Lifecycle
+    // --------------------------------------------------------------------------
+    private void handleSaveNetwork() {
+        if (graph.getDeviceCount() == 0) {
+            showAlert("Cannot Save", "The network is empty. Register at least one device before saving.");
+            return;
+        }
+
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Save ResQMesh Network Topology");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Configuration Files (*.json)", "*.json"));
+        fileChooser.setInitialFileName("resqmesh-network.json");
+
+        File file = fileChooser.showSaveDialog(null);
+        if (file != null) {
+            try {
+                NetworkConfigManager.saveToFile(graph, file, "ResQMesh Simulation Topology");
+                log("CONFIG", String.format("Saved network configuration (%d nodes, %d links) to '%s'",
+                        graph.getDeviceCount(), graph.getTotalLinkCount() / 2, file.getName()));
+                showAlert("Network Saved", String.format("Successfully saved %d devices and %d connections to:\n%s",
+                        graph.getDeviceCount(), graph.getTotalLinkCount() / 2, file.getAbsolutePath()));
+            } catch (Exception ex) {
+                log("ERROR", "Failed to save configuration: " + ex.getMessage());
+                showAlert("Save Failed", "Could not write configuration to disk:\n" + ex.getMessage());
+            }
+        }
+    }
+
+    private void handleLoadNetwork() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Load ResQMesh Network Topology");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Configuration Files (*.json)", "*.json"));
+
+        File file = fileChooser.showOpenDialog(null);
+        if (file != null) {
+            try {
+                // Clear previous simulation outcomes & route highlights prior to loading new config
+                if (topologyPane != null) {
+                    topologyPane.clearRouteHighlight();
+                }
+                renderEmptyRoute();
+                resultBadge.setText("WAITING FOR DISPATCH");
+                resultBadge.setStyle("-fx-background-color: #1e293b; -fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px;");
+                resultExplanationLabel.setText("Loaded new network configuration. Ready for simulation dispatch.");
+
+                NetworkConfigManager.loadFromFile(file, graph);
+
+                // Update device counter to prevent ID collisions on new device additions
+                deviceIdCounter = Math.max(deviceIdCounter, graph.getDeviceCount() + 1);
+
+                refreshUI();
+
+                // Select first device if available
+                if (!graph.getAllDevices().isEmpty()) {
+                    List<CommunicationDevice> list = new ArrayList<>(graph.getAllDevices());
+                    CommunicationDevice first = list.get(0);
+                    selectedDeviceComboBox.setValue(first);
+                    senderComboBox.setValue(first);
+                    if (list.size() > 1) {
+                        recipientComboBox.setValue(list.get(1));
+                    }
+                    if (topologyPane != null) {
+                        topologyPane.selectDevice(first);
+                    }
+                }
+
+                log("CONFIG", String.format("Loaded network topology from '%s': %d nodes, %d links.",
+                        file.getName(), graph.getDeviceCount(), graph.getTotalLinkCount() / 2));
+                showAlert("Network Loaded", String.format("Successfully loaded configuration '%s':\n• %d Devices Registered\n• %d Active Mesh Connections",
+                        file.getName(), graph.getDeviceCount(), graph.getTotalLinkCount() / 2));
+            } catch (ConfigurationException ex) {
+                log("ERROR", "Invalid configuration file: " + ex.getMessage());
+                showAlert("Configuration Validation Error", "The selected file is not a valid ResQMesh configuration:\n\n" + ex.getMessage());
+            } catch (Exception ex) {
+                log("ERROR", "Failed to load configuration file: " + ex.getMessage());
+                showAlert("Load Failed", "Error reading configuration file:\n\n" + ex.getMessage());
+            }
+        }
+    }
+
+    private void handleNewSimulation() {
+        totalMessagesDispatched = 0;
+        successfulDeliveries = 0;
+        messageCounter = 1;
+
+        if (topologyPane != null) {
+            topologyPane.clearRouteHighlight();
+        }
+        renderEmptyRoute();
+        resultBadge.setText("WAITING FOR DISPATCH");
+        resultBadge.setStyle("-fx-background-color: #1e293b; -fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px;");
+        resultExplanationLabel.setText("New simulation initiated. All devices recharged to 100% and delivery metrics reset.");
+
+        // Recharge all nodes in current network to 100% active state
+        for (CommunicationDevice dev : graph.getAllDevices()) {
+            dev.recharge(100.0);
+        }
+
+        refreshUI();
+
+        log("SIMULATION", "Started new simulation session. All devices recharged to 100% and transmission counters reset.");
+    }
+
+    // --------------------------------------------------------------------------
+    // 7. Helpers & Utilities
     // --------------------------------------------------------------------------
     private void loadSampleNetwork() {
         graph.clear();
