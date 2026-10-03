@@ -43,13 +43,13 @@ import java.util.stream.Collectors;
 
 /**
  * ResQMesh – Emergency Communication Dashboard
- * Step 8: Visual Network Topology Panel & Route Highlighting.
- * 
- * Features:
- * - Interactive visual network topology canvas with draggable nodes and dynamic links.
- * - Tabbed navigation between Visual Mesh Topology and Device Telemetry Table.
- * - Real-time BFS transmission path illumination.
- * - Live Node Inspector and synchronization across all controls.
+ * User Experience & Guided Workflow Overhaul.
+ *
+ * Four distinct, uncluttered primary workspaces:
+ * 1. Dashboard: Guided 3-step workflow, KPI cards, network health overview, quick dispatch & outcome snapshot.
+ * 2. Network & Devices: Dedicated spacious topology canvas, telemetry table, node controls, and easy provisioning.
+ * 3. Emergency Dispatch: Distraction-free dispatch console with presets, human-friendly outcome, and collapsible technical details.
+ * 4. Activity History: Timeline event audit trail and real-time terminal feed.
  */
 public class App extends Application {
 
@@ -68,11 +68,34 @@ public class App extends Application {
     private int totalMessagesDispatched = 0;
     private int successfulDeliveries = 0;
 
-    // KPI Metric Labels
+    // Section Views & Navigation
+    private StackPane viewContainer;
+    private ScrollPane dashboardScrollPane;
+    private ScrollPane networkScrollPane;
+    private ScrollPane dispatchScrollPane;
+    private ScrollPane activityScrollPane;
+
+    private Button navDashboardBtn;
+    private Button navNetworkBtn;
+    private Button navDispatchBtn;
+    private Button navActivityBtn;
+    private final List<Button> navButtons = new ArrayList<>();
+
+    // Guided Workflow Step Badges / Status Labels (Dashboard)
+    private Label step1StatusLabel;
+    private Label step2StatusLabel;
+    private Label step3StatusLabel;
+
+    // Dashboard Overview Metric Labels
     private Label kpiTotalNodesLabel;
     private Label kpiOnlineHealthLabel;
     private Label kpiMeshLinksLabel;
     private Label kpiSuccessRateLabel;
+    private Label dashboardPhonesCountLabel;
+    private Label dashboardSecurityCountLabel;
+    private Label dashboardMedicalCountLabel;
+    private Label dashboardActiveOnlineCountLabel;
+    private Label dashboardOfflineCountLabel;
 
     // Central Network Panels & Visualization
     private TabPane networkTabPane;
@@ -81,24 +104,44 @@ public class App extends Application {
     private ComboBox<CommunicationDevice> selectedDeviceComboBox;
     private Button dynamicToggleBtn;
     private Button rechargeBtn;
+    private Label selectedDeviceStatusLabel;
+
+    // Add & Connect Devices Forms
     private TextField addDeviceNameField;
     private ComboBox<String> addDeviceTypeSelect;
+    private Label addDeviceRoleDescLabel;
+    private Label addDeviceFeedbackLabel;
+
     private ComboBox<CommunicationDevice> linkDeviceAComboBox;
     private ComboBox<CommunicationDevice> linkDeviceBComboBox;
+    private Label connectFeedbackLabel;
 
     // Emergency Messaging Controls
     private ComboBox<CommunicationDevice> senderComboBox;
     private ComboBox<CommunicationDevice> recipientComboBox;
     private ComboBox<Priority> priorityComboBox;
     private TextField messageTextField;
+    private Label priorityDescLabel;
+
+    // Contextual Guidance Banner for Dispatch
+    private HBox dispatchGuidanceBanner;
+    private Label dispatchGuidanceLabel;
 
     // Delivery Outcome Showcase
     private Label resultBadge;
     private HBox resultRouteHBox;
     private Label resultExplanationLabel;
     private VBox outcomeCard;
+    private Button replayFromOutcomeBtn;
+    private Button viewTimelineFromOutcomeBtn;
 
-    // Activity Feed
+    // Collapsible Technical Diagnostics in Outcome
+    private VBox technicalDetailsBox;
+    private Label technicalDetailsContent;
+    private Button toggleTechDetailsBtn;
+    private boolean techDetailsVisible = false;
+
+    // Activity Feed & Terminal
     private TextArea activityFeedArea;
 
     // Sidebar Live Monitor Labels
@@ -112,10 +155,8 @@ public class App extends Application {
     private TableView<SimulationEvent> timelineTable;
     private Label timelineSummaryLabel;
     private Label eventDetailLabel;
-    private Button replayFromOutcomeBtn;
     private Tab topologyTab;
     private Tab tableTab;
-    private Tab timelineTab;
 
     @Override
     public void start(Stage primaryStage) {
@@ -131,36 +172,33 @@ public class App extends Application {
         // 1. Left Sidebar Navigation
         root.setLeft(createSidebar());
 
-        // 2. Center Content Area (Top KPI Cards + Main Workspaces)
-        VBox centerArea = new VBox(16);
-        centerArea.setPadding(new Insets(18, 22, 22, 22));
-        centerArea.setStyle("-fx-background-color: #070b14;");
+        // 2. Center View Container (Holds the 4 clean sections)
+        viewContainer = new StackPane();
+        viewContainer.setStyle("-fx-background-color: #070b14;");
 
-        // Top KPI Metric Cards
-        centerArea.getChildren().add(createKpiStatsRow());
+        // Initialize Shared Network Topology Canvas & Device Table
+        topologyPane = new NetworkTopologyPane(graph);
+        topologyPane.setOnDeviceSelected(dev -> {
+            if (selectedDeviceComboBox != null) {
+                selectedDeviceComboBox.setValue(dev);
+            }
+            if (deviceTable != null) {
+                deviceTable.getSelectionModel().select(dev);
+            }
+            updateToggleState(dev);
+        });
 
-        // Operational Deck: Split into Central Network Status (Left) & Dispatch/Feed (Right)
-        HBox operationalDeck = new HBox(18);
-        HBox.setHgrow(operationalDeck, javafx.scene.layout.Priority.ALWAYS);
-        VBox.setVgrow(operationalDeck, javafx.scene.layout.Priority.ALWAYS);
+        deviceTable = createDeviceTable();
 
-        VBox networkStatusPanel = createNetworkStatusPanel();
-        VBox dispatchAndLogsPanel = createDispatchAndLogsPanel();
+        // Build the 4 Primary Workspaces
+        dashboardScrollPane = wrapInScrollPane(createDashboardView());
+        networkScrollPane = wrapInScrollPane(createNetworkView());
+        dispatchScrollPane = wrapInScrollPane(createDispatchView());
+        activityScrollPane = wrapInScrollPane(createActivityView());
 
-        HBox.setHgrow(networkStatusPanel, javafx.scene.layout.Priority.ALWAYS);
-        HBox.setHgrow(dispatchAndLogsPanel, javafx.scene.layout.Priority.ALWAYS);
-        networkStatusPanel.setPrefWidth(740);
-        dispatchAndLogsPanel.setPrefWidth(540);
-
-        operationalDeck.getChildren().addAll(networkStatusPanel, dispatchAndLogsPanel);
-        centerArea.getChildren().add(operationalDeck);
-
-        ScrollPane centerScrollPane = new ScrollPane(centerArea);
-        centerScrollPane.setFitToWidth(true);
-        centerScrollPane.setFitToHeight(true);
-        centerScrollPane.setStyle("-fx-background: #070b14; -fx-background-color: #070b14; -fx-border-color: transparent;");
-
-        root.setCenter(centerScrollPane);
+        // Default to Dashboard
+        showView(dashboardScrollPane, navDashboardBtn);
+        root.setCenter(viewContainer);
 
         // Preload standard campus disaster relief network
         loadSampleNetwork();
@@ -178,7 +216,24 @@ public class App extends Application {
         primaryStage.setMinHeight(760);
         primaryStage.show();
 
-        log("SYSTEM", "ResQMesh Emergency Command Dashboard with Visual Topology Canvas initialized.");
+        log("SYSTEM", "ResQMesh Emergency Command Dashboard initialized.");
+    }
+
+    private ScrollPane wrapInScrollPane(VBox content) {
+        ScrollPane sp = new ScrollPane(content);
+        sp.setFitToWidth(true);
+        sp.setStyle("-fx-background: #070b14; -fx-background-color: #070b14; -fx-border-color: transparent;");
+        return sp;
+    }
+
+    private void showView(ScrollPane viewScrollPane, Button activeNavBtn) {
+        viewContainer.getChildren().setAll(viewScrollPane);
+        for (Button btn : navButtons) {
+            btn.getStyleClass().remove("sidebar-nav-btn-active");
+        }
+        if (activeNavBtn != null) {
+            activeNavBtn.getStyleClass().add("sidebar-nav-btn-active");
+        }
     }
 
     // --------------------------------------------------------------------------
@@ -207,40 +262,22 @@ public class App extends Application {
 
         brandBox.getChildren().addAll(brandHeader, brandSub);
 
-        // Navigation Items
+        // Navigation Menu (4 Clear Primary Sections)
         VBox navMenu = new VBox(6);
-        Button navTopology = createNavButton("🗺️ Visual Topology", true);
-        Button navTable = createNavButton("📋 Node Telemetry", false);
-        Button navTimeline = createNavButton("⏱️ Event Timeline", false);
-        Button navDispatch = createNavButton("🚨 Emergency Dispatch", false);
-        Button navLogs = createNavButton("📜 Terminal Logs", false);
+        navDashboardBtn = createNavButton("📊 Dashboard", true);
+        navNetworkBtn = createNavButton("🗺️ Network & Devices", false);
+        navDispatchBtn = createNavButton("🚨 Emergency Dispatch", false);
+        navActivityBtn = createNavButton("📜 Activity & History", false);
 
-        navTopology.setOnAction(e -> {
-            setActiveNav(navMenu, navTopology);
-            if (networkTabPane != null) networkTabPane.getSelectionModel().select(0);
-        });
+        navButtons.clear();
+        navButtons.addAll(List.of(navDashboardBtn, navNetworkBtn, navDispatchBtn, navActivityBtn));
 
-        navTable.setOnAction(e -> {
-            setActiveNav(navMenu, navTable);
-            if (networkTabPane != null) networkTabPane.getSelectionModel().select(1);
-        });
+        navDashboardBtn.setOnAction(e -> showView(dashboardScrollPane, navDashboardBtn));
+        navNetworkBtn.setOnAction(e -> showView(networkScrollPane, navNetworkBtn));
+        navDispatchBtn.setOnAction(e -> showView(dispatchScrollPane, navDispatchBtn));
+        navActivityBtn.setOnAction(e -> showView(activityScrollPane, navActivityBtn));
 
-        navTimeline.setOnAction(e -> {
-            setActiveNav(navMenu, navTimeline);
-            if (networkTabPane != null) networkTabPane.getSelectionModel().select(2);
-        });
-
-        navDispatch.setOnAction(e -> {
-            setActiveNav(navMenu, navDispatch);
-            if (messageTextField != null) messageTextField.requestFocus();
-        });
-
-        navLogs.setOnAction(e -> {
-            setActiveNav(navMenu, navLogs);
-            if (activityFeedArea != null) activityFeedArea.requestFocus();
-        });
-
-        navMenu.getChildren().addAll(navTopology, navTable, navTimeline, navDispatch, navLogs);
+        navMenu.getChildren().addAll(navDashboardBtn, navNetworkBtn, navDispatchBtn, navActivityBtn);
 
         // Live Mesh Health Monitor Widget
         VBox healthWidget = new VBox(8);
@@ -263,10 +300,15 @@ public class App extends Application {
 
         healthWidget.getChildren().addAll(healthTitle, sidebarActiveNodesCountLabel, sidebarLinksCountLabel, routingEngineLabel, energyRuleLabel);
 
-        // Topology & Configuration Actions
+        // Configuration & Persistence Actions
         VBox actionsBox = new VBox(8);
         Label actionsTitle = new Label("CONFIGURATION & ACTIONS");
         actionsTitle.setStyle("-fx-font-size: 10px; -fx-font-weight: 800; -fx-text-fill: #38bdf8;");
+
+        Button newSimBtn = new Button("✨ New Simulation");
+        newSimBtn.setMaxWidth(Double.MAX_VALUE);
+        newSimBtn.setStyle("-fx-background-color: #0e223d; -fx-text-fill: #38bdf8; -fx-font-size: 12px; -fx-font-weight: bold; -fx-background-radius: 6px; -fx-cursor: hand; -fx-padding: 7 12; -fx-border-color: #0284c7; -fx-border-radius: 6px;");
+        newSimBtn.setOnAction(e -> handleNewSimulation());
 
         Button saveBtn = new Button("💾 Save Network (JSON)");
         saveBtn.setMaxWidth(Double.MAX_VALUE);
@@ -277,11 +319,6 @@ public class App extends Application {
         loadBtn.setMaxWidth(Double.MAX_VALUE);
         loadBtn.getStyleClass().add("btn-ghost");
         loadBtn.setOnAction(e -> handleLoadNetwork());
-
-        Button newSimBtn = new Button("✨ New Simulation");
-        newSimBtn.setMaxWidth(Double.MAX_VALUE);
-        newSimBtn.setStyle("-fx-background-color: #0e223d; -fx-text-fill: #38bdf8; -fx-font-size: 12px; -fx-font-weight: bold; -fx-background-radius: 6px; -fx-cursor: hand; -fx-padding: 7 12; -fx-border-color: #0284c7; -fx-border-radius: 6px;");
-        newSimBtn.setOnAction(e -> handleNewSimulation());
 
         Button resetBtn = new Button("↺ Reset Sample Mesh");
         resetBtn.setMaxWidth(Double.MAX_VALUE);
@@ -300,13 +337,13 @@ public class App extends Application {
             log("TOPOLOGY", "Network graph cleared. All devices and links removed.");
         });
 
-        actionsBox.getChildren().addAll(actionsTitle, saveBtn, loadBtn, newSimBtn, resetBtn, clearBtn);
+        actionsBox.getChildren().addAll(actionsTitle, newSimBtn, saveBtn, loadBtn, resetBtn, clearBtn);
 
         Region spacer = new Region();
         VBox.setVgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
 
         // Sidebar Footer
-        Label footerNote = new Label("ResQMesh v1.0 • College Mini-Project\nInteractive Graph Visualization • BFS");
+        Label footerNote = new Label("ResQMesh v1.0 • Disaster Response Mesh\nShortest-Path BFS • Multi-Hop Relay");
         footerNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #475569; -fx-line-spacing: 2px;");
 
         sidebar.getChildren().addAll(brandBox, navMenu, healthWidget, actionsBox, spacer, footerNote);
@@ -323,18 +360,190 @@ public class App extends Application {
         return btn;
     }
 
-    private void setActiveNav(VBox navMenu, Button activeBtn) {
-        for (javafx.scene.Node node : navMenu.getChildren()) {
-            if (node instanceof Button b) {
-                b.getStyleClass().remove("sidebar-nav-btn-active");
+    // --------------------------------------------------------------------------
+    // 2. View 1: 📊 Dashboard Workspace
+    // --------------------------------------------------------------------------
+    private VBox createDashboardView() {
+        VBox view = new VBox(16);
+        view.setPadding(new Insets(18, 22, 22, 22));
+
+        // Header
+        view.getChildren().add(createSectionHeader("Emergency Command Dashboard",
+                "High-level network health, guided workflow progress, and quick simulation control"));
+
+        // Step-by-Step Guided Workflow Banner
+        view.getChildren().add(createWorkflowStepperCard());
+
+        // Top KPI Metric Stats Row
+        view.getChildren().add(createKpiStatsRow());
+
+        // Dashboard Main Deck: Two Balanced Cards
+        HBox deck = new HBox(16);
+        HBox.setHgrow(deck, javafx.scene.layout.Priority.ALWAYS);
+
+        // Left Card: Live Network Composition & Health
+        VBox healthCard = createCard("Network Architecture & Health", "Current device classification, active connections, and power state");
+        healthCard.setPrefWidth(580);
+        HBox.setHgrow(healthCard, javafx.scene.layout.Priority.ALWAYS);
+
+        GridPane healthGrid = new GridPane();
+        healthGrid.setHgap(16);
+        healthGrid.setVgap(12);
+
+        Label phoneIcon = new Label("📱 Student Phones (Handheld):");
+        phoneIcon.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 12px;");
+        dashboardPhonesCountLabel = new Label("0");
+        dashboardPhonesCountLabel.setStyle("-fx-text-fill: #38bdf8; -fx-font-weight: bold; -fx-font-size: 12px;");
+
+        Label secIcon = new Label("🛡️ Security Stations (Fixed Post):");
+        secIcon.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 12px;");
+        dashboardSecurityCountLabel = new Label("0");
+        dashboardSecurityCountLabel.setStyle("-fx-text-fill: #818cf8; -fx-font-weight: bold; -fx-font-size: 12px;");
+
+        Label medIcon = new Label("🏥 Medical Centers (Triage Hub):");
+        medIcon.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 12px;");
+        dashboardMedicalCountLabel = new Label("0");
+        dashboardMedicalCountLabel.setStyle("-fx-text-fill: #34d399; -fx-font-weight: bold; -fx-font-size: 12px;");
+
+        Label onlineIcon = new Label("🟢 Operational Nodes:");
+        onlineIcon.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 12px;");
+        dashboardActiveOnlineCountLabel = new Label("0 Online");
+        dashboardActiveOnlineCountLabel.setStyle("-fx-text-fill: #10b981; -fx-font-weight: bold; -fx-font-size: 12px;");
+
+        Label offlineIcon = new Label("🔴 Offline / Depleted Nodes:");
+        offlineIcon.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 12px;");
+        dashboardOfflineCountLabel = new Label("0 Offline");
+        dashboardOfflineCountLabel.setStyle("-fx-text-fill: #f87171; -fx-font-weight: bold; -fx-font-size: 12px;");
+
+        healthGrid.add(phoneIcon, 0, 0);
+        healthGrid.add(dashboardPhonesCountLabel, 1, 0);
+        healthGrid.add(secIcon, 0, 1);
+        healthGrid.add(dashboardSecurityCountLabel, 1, 1);
+        healthGrid.add(medIcon, 0, 2);
+        healthGrid.add(dashboardMedicalCountLabel, 1, 2);
+        healthGrid.add(onlineIcon, 0, 3);
+        healthGrid.add(dashboardActiveOnlineCountLabel, 1, 3);
+        healthGrid.add(offlineIcon, 0, 4);
+        healthGrid.add(dashboardOfflineCountLabel, 1, 4);
+
+        Button openTopologyBtn = new Button("🗺️ Open Interactive Topology & Node Controls ➔");
+        openTopologyBtn.getStyleClass().add("btn-cyan");
+        openTopologyBtn.setMaxWidth(Double.MAX_VALUE);
+        openTopologyBtn.setOnAction(e -> {
+            showView(networkScrollPane, navNetworkBtn);
+            if (networkTabPane != null) {
+                networkTabPane.getSelectionModel().select(topologyTab);
             }
-        }
-        activeBtn.getStyleClass().add("sidebar-nav-btn-active");
+        });
+
+        healthCard.getChildren().addAll(healthGrid, new Region(), openTopologyBtn);
+
+        // Right Card: Quick Simulation Action Deck
+        VBox quickActionCard = createCard("Emergency Dispatch Gateway", "Test BFS transmission propagation or review latest outcome");
+        quickActionCard.setPrefWidth(680);
+        HBox.setHgrow(quickActionCard, javafx.scene.layout.Priority.ALWAYS);
+
+        Label quickDesc = new Label("Simulate priority distress alerts across the peer mesh. The shortest route is calculated dynamically using Breadcrumb BFS.");
+        quickDesc.setStyle("-fx-text-fill: #cbd5e1; -fx-font-size: 12px; -fx-line-spacing: 2px;");
+        quickDesc.setWrapText(true);
+
+        HBox quickActionButtons = new HBox(10);
+        Button goToDispatchBtn = new Button("🚀 Go to Emergency Dispatch Console ➔");
+        goToDispatchBtn.getStyleClass().add("btn-dispatch");
+        HBox.setHgrow(goToDispatchBtn, javafx.scene.layout.Priority.ALWAYS);
+        goToDispatchBtn.setMaxWidth(Double.MAX_VALUE);
+        goToDispatchBtn.setOnAction(e -> showView(dispatchScrollPane, navDispatchBtn));
+
+        Button quickTimelineBtn = new Button("⏱️ View Activity Timeline ➔");
+        quickTimelineBtn.getStyleClass().add("btn-ghost");
+        quickTimelineBtn.setOnAction(e -> showView(activityScrollPane, navActivityBtn));
+
+        quickActionButtons.getChildren().addAll(goToDispatchBtn, quickTimelineBtn);
+
+        // Add Outcome Card to Quick Action Deck
+        outcomeCard = createOutcomeCard();
+
+        quickActionCard.getChildren().addAll(quickDesc, outcomeCard, quickActionButtons);
+
+        deck.getChildren().addAll(healthCard, quickActionCard);
+        view.getChildren().add(deck);
+
+        return view;
     }
 
-    // --------------------------------------------------------------------------
-    // 2. Top KPI Metric Stats Row
-    // --------------------------------------------------------------------------
+    private VBox createWorkflowStepperCard() {
+        VBox card = new VBox(10);
+        card.getStyleClass().add("workflow-stepper");
+
+        HBox header = new HBox(8);
+        header.setAlignment(Pos.CENTER_LEFT);
+        Label icon = new Label("📍");
+        Label title = new Label("GUIDED WORKFLOW");
+        title.setStyle("-fx-font-size: 11px; -fx-font-weight: 800; -fx-text-fill: #38bdf8; -fx-text-transform: uppercase;");
+        Label subtitle = new Label("— Follow these 3 simple steps to simulate disaster mesh communication");
+        subtitle.setStyle("-fx-font-size: 11px; -fx-text-fill: #64748b;");
+        header.getChildren().addAll(icon, title, subtitle);
+
+        HBox stepsRow = new HBox(12);
+        stepsRow.setAlignment(Pos.CENTER);
+
+        // Step 1: Add Devices
+        step1StatusLabel = new Label("✔ 5 Registered");
+        VBox step1 = createStepCard("STEP 1", "Add Devices", step1StatusLabel,
+                "Register phones, security posts & medical stations", e -> showView(networkScrollPane, navNetworkBtn));
+
+        Label arrow1 = new Label("──▶");
+        arrow1.getStyleClass().add("step-arrow");
+
+        // Step 2: Connect Devices
+        step2StatusLabel = new Label("✔ 3 Links Active");
+        VBox step2 = createStepCard("STEP 2", "Connect Mesh", step2StatusLabel,
+                "Establish bidirectional wireless links between nodes", e -> showView(networkScrollPane, navNetworkBtn));
+
+        Label arrow2 = new Label("──▶");
+        arrow2.getStyleClass().add("step-arrow");
+
+        // Step 3: Send Alert
+        step3StatusLabel = new Label("⚡ Ready to Dispatch");
+        VBox step3 = createStepCard("STEP 3", "Send Emergency Alert", step3StatusLabel,
+                "Broadcast priority distress alerts along the shortest path", e -> showView(dispatchScrollPane, navDispatchBtn));
+
+        HBox.setHgrow(step1, javafx.scene.layout.Priority.ALWAYS);
+        HBox.setHgrow(step2, javafx.scene.layout.Priority.ALWAYS);
+        HBox.setHgrow(step3, javafx.scene.layout.Priority.ALWAYS);
+
+        stepsRow.getChildren().addAll(step1, arrow1, step2, arrow2, step3);
+        card.getChildren().addAll(header, stepsRow);
+        return card;
+    }
+
+    private VBox createStepCard(String stepNum, String title, Label statusLabel, String desc, javafx.event.EventHandler<javafx.event.ActionEvent> onAction) {
+        VBox card = new VBox(5);
+        card.getStyleClass().add("step-card");
+
+        HBox top = new HBox(6);
+        top.setAlignment(Pos.CENTER_LEFT);
+        Label badge = new Label(stepNum);
+        badge.getStyleClass().add("step-badge");
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
+
+        statusLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: 700; -fx-text-fill: #34d399;");
+        top.getChildren().addAll(badge, spacer, statusLabel);
+
+        Label titleLbl = new Label(title);
+        titleLbl.getStyleClass().add("step-title");
+
+        Label descLbl = new Label(desc);
+        descLbl.getStyleClass().add("step-desc");
+        descLbl.setWrapText(true);
+
+        card.getChildren().addAll(top, titleLbl, descLbl);
+        card.setOnMouseClicked(e -> onAction.handle(new javafx.event.ActionEvent()));
+        return card;
+    }
+
     private HBox createKpiStatsRow() {
         HBox row = new HBox(14);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -382,33 +591,155 @@ public class App extends Application {
     }
 
     // --------------------------------------------------------------------------
-    // 3. Central Network Status Panel (Interactive Topology Canvas + Table)
+    // 3. View 2: 🗺️ Network & Devices Workspace
     // --------------------------------------------------------------------------
-    private VBox createNetworkStatusPanel() {
-        VBox col = new VBox(14);
+    private VBox createNetworkView() {
+        VBox view = new VBox(16);
+        view.setPadding(new Insets(18, 22, 22, 22));
 
-        // Section A: Tabbed Network View (Interactive Topology Canvas vs Telemetry Table)
-        VBox viewCard = createCard("Network Status & Topology", "Interactive mesh graph, live connection lines, and telemetry");
-        VBox.setVgrow(viewCard, javafx.scene.layout.Priority.ALWAYS);
+        // Header
+        view.getChildren().add(createSectionHeader("Network Topology & Devices",
+                "Interactive visual mesh layout, node telemetry, power management, and connection provisioning"));
+
+        // Tabbed Canvas Area: Interactive Topology Canvas vs Telemetry Table
+        VBox canvasContainerCard = createCard("Network Visualization & Node Telemetry",
+                "Drag nodes to reposition • Click to inspect • Links follow nodes dynamically in real-time");
+        canvasContainerCard.setPrefHeight(460);
 
         networkTabPane = new TabPane();
         networkTabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         VBox.setVgrow(networkTabPane, javafx.scene.layout.Priority.ALWAYS);
 
-        // Tab 1: Interactive Visual Network Topology Canvas
-        topologyPane = new NetworkTopologyPane(graph);
-        topologyPane.setOnDeviceSelected(dev -> {
-            selectedDeviceComboBox.setValue(dev);
-            deviceTable.getSelectionModel().select(dev);
-            updateToggleState(dev);
+        topologyTab = new Tab("🗺️ Interactive Mesh Topology", topologyPane);
+        tableTab = new Tab("📋 Registered Devices Telemetry Table", deviceTable);
+        networkTabPane.getTabs().addAll(topologyTab, tableTab);
+
+        canvasContainerCard.getChildren().add(networkTabPane);
+        view.getChildren().add(canvasContainerCard);
+
+        // Node Power & State Control Toolbar Strip
+        HBox controlStrip = new HBox(12);
+        controlStrip.setAlignment(Pos.CENTER_LEFT);
+        controlStrip.setStyle("-fx-background-color: #0b1324; -fx-background-radius: 8px; -fx-padding: 10px 14px; -fx-border-color: #192742; -fx-border-radius: 8px;");
+
+        Label selectLbl = new Label("Selected Node:");
+        selectLbl.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 12px; -fx-font-weight: 700;");
+
+        selectedDeviceComboBox = createDeviceComboBox();
+        selectedDeviceComboBox.setPrefWidth(240);
+        selectedDeviceComboBox.valueProperty().addListener((obs, oldV, newV) -> {
+            updateToggleState(newV);
+            if (newV != null && topologyPane != null) {
+                topologyPane.selectDevice(newV);
+            }
         });
 
-        topologyTab = new Tab("🗺️ Interactive Mesh Topology", topologyPane);
+        dynamicToggleBtn = new Button("Toggle Online / Offline");
+        dynamicToggleBtn.getStyleClass().add("btn-rose");
+        dynamicToggleBtn.setOnAction(e -> handleToggleStatus());
 
-        // Tab 2: Active Nodes Table
-        deviceTable = new TableView<>();
-        deviceTable.setPlaceholder(new Label("No communication devices currently registered."));
-        deviceTable.setPrefHeight(320);
+        rechargeBtn = new Button("⚡ Recharge to 100%");
+        rechargeBtn.getStyleClass().add("btn-emerald");
+        rechargeBtn.setOnAction(e -> handleRecharge());
+
+        selectedDeviceStatusLabel = new Label("");
+        selectedDeviceStatusLabel.setStyle("-fx-text-fill: #38bdf8; -fx-font-size: 11px;");
+
+        controlStrip.getChildren().addAll(selectLbl, selectedDeviceComboBox, dynamicToggleBtn, rechargeBtn, selectedDeviceStatusLabel);
+        view.getChildren().add(controlStrip);
+
+        // Side-by-Side Device Management Cards
+        HBox managementDeck = new HBox(16);
+        HBox.setHgrow(managementDeck, javafx.scene.layout.Priority.ALWAYS);
+
+        // Card 1: Add New Virtual Device
+        VBox addCard = createCard("Add Virtual Device (Step 1)", "Register a new student handheld or base station to the mesh");
+        HBox.setHgrow(addCard, javafx.scene.layout.Priority.ALWAYS);
+
+        GridPane addGrid = new GridPane();
+        addGrid.setHgap(10);
+        addGrid.setVgap(10);
+
+        addDeviceNameField = new TextField();
+        addDeviceNameField.setPromptText("Device name (e.g. Science Quad Relay)");
+
+        addDeviceTypeSelect = new ComboBox<>();
+        addDeviceTypeSelect.getItems().addAll("Student Phone", "Security Station", "Medical Station");
+        addDeviceTypeSelect.setValue("Student Phone");
+
+        addDeviceRoleDescLabel = new Label("📱 Student Phone: Handheld node. Relays standard alerts (-2.0% battery/hop). Cannot relay CRITICAL alerts.");
+        addDeviceRoleDescLabel.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-line-spacing: 1px;");
+        addDeviceRoleDescLabel.setWrapText(true);
+
+        addDeviceTypeSelect.valueProperty().addListener((obs, oldV, newV) -> {
+            if ("Security Station".equals(newV)) {
+                addDeviceRoleDescLabel.setText("🛡️ Security Station: Fixed base post. Full relay authorization for all priorities including CRITICAL.");
+            } else if ("Medical Station".equals(newV)) {
+                addDeviceRoleDescLabel.setText("🏥 Medical Center: Fixed emergency triage center. High-capacity destination and full-priority relay.");
+            } else {
+                addDeviceRoleDescLabel.setText("📱 Student Phone: Handheld node. Relays standard alerts (-2.0% battery/hop). Cannot relay CRITICAL alerts.");
+            }
+        });
+
+        Button addBtn = new Button("➕ Register Node");
+        addBtn.getStyleClass().add("btn-cyan");
+        addBtn.setOnAction(e -> handleAddDevice());
+
+        addDeviceFeedbackLabel = new Label("");
+        addDeviceFeedbackLabel.getStyleClass().add("feedback-msg");
+
+        addGrid.add(createFormLabel("Device Name:"), 0, 0);
+        addGrid.add(addDeviceNameField, 1, 0);
+        addGrid.add(createFormLabel("Device Role:"), 0, 1);
+        addGrid.add(addDeviceTypeSelect, 1, 1);
+        addGrid.add(addDeviceRoleDescLabel, 1, 2);
+        addGrid.add(addBtn, 1, 3);
+        addGrid.add(addDeviceFeedbackLabel, 1, 4);
+
+        addCard.getChildren().add(addGrid);
+
+        // Card 2: Connect Nodes with Mesh Link
+        VBox connectCard = createCard("Connect Nodes (Step 2)", "Establish bidirectional wireless mesh link between two devices");
+        HBox.setHgrow(connectCard, javafx.scene.layout.Priority.ALWAYS);
+
+        GridPane linkGrid = new GridPane();
+        linkGrid.setHgap(10);
+        linkGrid.setVgap(10);
+
+        linkDeviceAComboBox = createDeviceComboBox();
+        linkDeviceBComboBox = createDeviceComboBox();
+
+        Label linkHelpLabel = new Label("🔗 Links allow emergency alerts to hop across nodes. Alerts route across the shortest path of connected links.");
+        linkHelpLabel.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-line-spacing: 1px;");
+        linkHelpLabel.setWrapText(true);
+
+        Button linkBtn = new Button("🔗 Connect Wireless Link");
+        linkBtn.getStyleClass().add("btn-blue");
+        linkBtn.setOnAction(e -> handleConnectDevices());
+
+        connectFeedbackLabel = new Label("");
+        connectFeedbackLabel.getStyleClass().add("feedback-msg");
+
+        linkGrid.add(createFormLabel("Source Node:"), 0, 0);
+        linkGrid.add(linkDeviceAComboBox, 1, 0);
+        linkGrid.add(createFormLabel("Connect With:"), 0, 1);
+        linkGrid.add(linkDeviceBComboBox, 1, 1);
+        linkGrid.add(linkHelpLabel, 1, 2);
+        linkGrid.add(linkBtn, 1, 3);
+        linkGrid.add(connectFeedbackLabel, 1, 4);
+
+        connectCard.getChildren().add(linkGrid);
+
+        managementDeck.getChildren().addAll(addCard, connectCard);
+        view.getChildren().add(managementDeck);
+
+        return view;
+    }
+
+    private TableView<CommunicationDevice> createDeviceTable() {
+        TableView<CommunicationDevice> table = new TableView<>();
+        table.setPlaceholder(new Label("No communication devices currently registered."));
+        table.setPrefHeight(360);
 
         // Col 1: Name & ID
         TableColumn<CommunicationDevice, String> nameCol = new TableColumn<>("Device Name & ID");
@@ -417,7 +748,7 @@ public class App extends Application {
 
         // Col 2: Type Badge
         TableColumn<CommunicationDevice, String> typeCol = new TableColumn<>("Type");
-        typeCol.setPrefWidth(130);
+        typeCol.setPrefWidth(140);
         typeCol.setCellValueFactory(cell -> {
             CommunicationDevice dev = cell.getValue();
             if (dev instanceof SecurityStation) return new SimpleStringProperty("🛡️ Security Post");
@@ -427,7 +758,7 @@ public class App extends Application {
 
         // Col 3: Battery Level
         TableColumn<CommunicationDevice, String> batteryCol = new TableColumn<>("Battery");
-        batteryCol.setPrefWidth(90);
+        batteryCol.setPrefWidth(95);
         batteryCol.setCellValueFactory(cell -> new SimpleStringProperty(String.format("%.1f%%", cell.getValue().getBatteryLevel())));
         batteryCol.setCellFactory(colData -> new TableCell<>() {
             @Override
@@ -456,7 +787,7 @@ public class App extends Application {
 
         // Col 4: Status Indicator Badge
         TableColumn<CommunicationDevice, String> statusCol = new TableColumn<>("Status");
-        statusCol.setPrefWidth(110);
+        statusCol.setPrefWidth(120);
         statusCol.setCellValueFactory(cell -> new SimpleStringProperty(cell.getValue().getStatus().name()));
         statusCol.setCellFactory(colData -> new TableCell<>() {
             @Override
@@ -482,7 +813,7 @@ public class App extends Application {
 
         // Col 5: Connected Peers
         TableColumn<CommunicationDevice, String> linksCol = new TableColumn<>("Connected Peers");
-        linksCol.setPrefWidth(180);
+        linksCol.setPrefWidth(220);
         linksCol.setCellValueFactory(cell -> {
             String peers = graph.getLinks(cell.getValue()).stream()
                     .map(l -> l.getDestination().getName())
@@ -490,141 +821,53 @@ public class App extends Application {
             return new SimpleStringProperty(peers.isEmpty() ? "(Isolated Node)" : peers);
         });
 
-        deviceTable.getColumns().add(nameCol);
-        deviceTable.getColumns().add(typeCol);
-        deviceTable.getColumns().add(batteryCol);
-        deviceTable.getColumns().add(statusCol);
-        deviceTable.getColumns().add(linksCol);
-        deviceTable.setItems(deviceObservableList);
+        table.getColumns().add(nameCol);
+        table.getColumns().add(typeCol);
+        table.getColumns().add(batteryCol);
+        table.getColumns().add(statusCol);
+        table.getColumns().add(linksCol);
+        table.setItems(deviceObservableList);
 
-        deviceTable.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
+        table.getSelectionModel().selectedItemProperty().addListener((obs, oldV, newV) -> {
             if (newV != null) {
                 selectedDeviceComboBox.setValue(newV);
                 updateToggleState(newV);
-                topologyPane.selectDevice(newV);
+                if (topologyPane != null) {
+                    topologyPane.selectDevice(newV);
+                }
             }
         });
 
-        tableTab = new Tab("📋 Device Telemetry Table", deviceTable);
-        timelineTab = new Tab("⏱️ Event Timeline & History", createTimelinePanel());
-        networkTabPane.getTabs().addAll(topologyTab, tableTab, timelineTab);
-        viewCard.getChildren().add(networkTabPane);
-
-        // Section B: Node Control Strip
-        HBox controlStrip = new HBox(12);
-        controlStrip.setAlignment(Pos.CENTER_LEFT);
-
-        Label selectLbl = new Label("Selected Node:");
-        selectLbl.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 12px; -fx-font-weight: 600;");
-
-        selectedDeviceComboBox = createDeviceComboBox();
-        selectedDeviceComboBox.setPrefWidth(220);
-        selectedDeviceComboBox.valueProperty().addListener((obs, oldV, newV) -> {
-            updateToggleState(newV);
-            if (newV != null) {
-                topologyPane.selectDevice(newV);
-            }
-        });
-
-        dynamicToggleBtn = new Button("Toggle Online / Offline");
-        dynamicToggleBtn.getStyleClass().add("btn-rose");
-        dynamicToggleBtn.setOnAction(e -> handleToggleStatus());
-
-        rechargeBtn = new Button("⚡ Recharge (100%)");
-        rechargeBtn.getStyleClass().add("btn-emerald");
-        rechargeBtn.setOnAction(e -> handleRecharge());
-
-        controlStrip.getChildren().addAll(selectLbl, selectedDeviceComboBox, dynamicToggleBtn, rechargeBtn);
-        viewCard.getChildren().add(controlStrip);
-
-        // Section C: Grid for Provisioning & Linking
-        HBox bottomGrid = new HBox(14);
-        HBox.setHgrow(bottomGrid, javafx.scene.layout.Priority.ALWAYS);
-
-        // Card C1: Add New Device
-        VBox addDeviceCard = createCard("Add Virtual Device", "Register new handheld or base station");
-        HBox.setHgrow(addDeviceCard, javafx.scene.layout.Priority.ALWAYS);
-
-        GridPane addGrid = new GridPane();
-        addGrid.setHgap(8);
-        addGrid.setVgap(8);
-
-        addDeviceNameField = new TextField();
-        addDeviceNameField.setPromptText("Device name (e.g. Quad Gate Post)");
-
-        addDeviceTypeSelect = new ComboBox<>();
-        addDeviceTypeSelect.getItems().addAll("Student Phone", "Security Station", "Medical Station");
-        addDeviceTypeSelect.setValue("Student Phone");
-
-        Button addBtn = new Button("➕ Add Node");
-        addBtn.getStyleClass().add("btn-cyan");
-        addBtn.setOnAction(e -> handleAddDevice());
-
-        addGrid.add(createFormLabel("Name:"), 0, 0);
-        addGrid.add(addDeviceNameField, 1, 0);
-        addGrid.add(createFormLabel("Type:"), 0, 1);
-        addGrid.add(addDeviceTypeSelect, 1, 1);
-        addGrid.add(addBtn, 1, 2);
-
-        addDeviceCard.getChildren().add(addGrid);
-
-        // Card C2: Establish Mesh Link
-        VBox connectCard = createCard("Connect Nodes", "Create bidirectional wireless mesh link");
-        HBox.setHgrow(connectCard, javafx.scene.layout.Priority.ALWAYS);
-
-        GridPane linkGrid = new GridPane();
-        linkGrid.setHgap(8);
-        linkGrid.setVgap(8);
-
-        linkDeviceAComboBox = createDeviceComboBox();
-        linkDeviceBComboBox = createDeviceComboBox();
-
-        Button linkBtn = new Button("🔗 Connect Link");
-        linkBtn.getStyleClass().add("btn-blue");
-        linkBtn.setOnAction(e -> handleConnectDevices());
-
-        linkGrid.add(createFormLabel("Node A:"), 0, 0);
-        linkGrid.add(linkDeviceAComboBox, 1, 0);
-        linkGrid.add(createFormLabel("Node B:"), 0, 1);
-        linkGrid.add(linkDeviceBComboBox, 1, 1);
-        linkGrid.add(linkBtn, 1, 2);
-
-        connectCard.getChildren().add(linkGrid);
-
-        bottomGrid.getChildren().addAll(addDeviceCard, connectCard);
-
-        col.getChildren().addAll(viewCard, bottomGrid);
-        return col;
-    }
-
-    private void updateToggleState(CommunicationDevice dev) {
-        if (dev == null) {
-            dynamicToggleBtn.setText("Toggle Online / Offline");
-            dynamicToggleBtn.setStyle("");
-            return;
-        }
-
-        if (dev.getStatus() == DeviceStatus.OFFLINE) {
-            dynamicToggleBtn.setText("🟢 Bring ONLINE");
-            dynamicToggleBtn.setStyle("-fx-background-color: #059669; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; -fx-background-radius: 6px;");
-        } else {
-            dynamicToggleBtn.setText("🔴 Take OFFLINE");
-            dynamicToggleBtn.setStyle("-fx-background-color: #e11d48; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; -fx-background-radius: 6px;");
-        }
+        return table;
     }
 
     // --------------------------------------------------------------------------
-    // 4. Dedicated Emergency Dispatch & Activity Feed Panel
+    // 4. View 3: 🚨 Emergency Dispatch Workspace
     // --------------------------------------------------------------------------
-    private VBox createDispatchAndLogsPanel() {
-        VBox col = new VBox(14);
+    private VBox createDispatchView() {
+        VBox view = new VBox(16);
+        view.setPadding(new Insets(18, 22, 22, 22));
 
-        // Card 1: Dispatch Emergency Alert Deck
-        VBox dispatchCard = createCard("Emergency Dispatch Console", "Select route endpoints and priority to trigger BFS propagation");
+        // Header
+        view.getChildren().add(createSectionHeader("Emergency Dispatch Console",
+                "Select route endpoints and priority to trigger shortest-path BFS mesh propagation"));
+
+        // Contextual Guidance Banner
+        dispatchGuidanceBanner = new HBox(8);
+        dispatchGuidanceBanner.setAlignment(Pos.CENTER_LEFT);
+        dispatchGuidanceBanner.getStyleClass().add("guide-banner");
+        dispatchGuidanceLabel = new Label("💡 Select a Sender and Target node to broadcast an emergency distress alert via multi-hop mesh routing.");
+        dispatchGuidanceLabel.setStyle("-fx-text-fill: #38bdf8; -fx-font-size: 12px;");
+        dispatchGuidanceBanner.getChildren().add(dispatchGuidanceLabel);
+        view.getChildren().add(dispatchGuidanceBanner);
+
+        // Dispatch Console Card
+        VBox dispatchCard = createCard("Emergency Dispatch Console (Step 3)",
+                "Select origin sender, destination target, and priority level");
 
         GridPane dispatchGrid = new GridPane();
-        dispatchGrid.setHgap(10);
-        dispatchGrid.setVgap(10);
+        dispatchGrid.setHgap(14);
+        dispatchGrid.setVgap(12);
 
         senderComboBox = createDeviceComboBox();
         recipientComboBox = createDeviceComboBox();
@@ -633,36 +876,67 @@ public class App extends Application {
         priorityComboBox.getItems().addAll(Priority.LOW, Priority.NORMAL, Priority.HIGH, Priority.CRITICAL);
         priorityComboBox.setValue(Priority.NORMAL);
 
+        priorityDescLabel = new Label("🔵 Normal Priority: Standard emergency message relay.");
+        priorityDescLabel.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px;");
+
+        priorityComboBox.valueProperty().addListener((obs, oldV, newV) -> {
+            if (newV == Priority.CRITICAL) {
+                priorityDescLabel.setText("🔴 CRITICAL: Life-safety alert. Handheld phones cannot forward; relays exclusively through Security and Medical Stations.");
+                priorityDescLabel.setStyle("-fx-text-fill: #fca5a5; -fx-font-size: 11px;");
+            } else if (newV == Priority.HIGH) {
+                priorityDescLabel.setText("🟠 HIGH: Urgent distress alert. Broadcasted across all operational relay nodes.");
+                priorityDescLabel.setStyle("-fx-text-fill: #fcd34d; -fx-font-size: 11px;");
+            } else if (newV == Priority.LOW) {
+                priorityDescLabel.setText("🟢 LOW: Routine status check-in and connectivity ping.");
+                priorityDescLabel.setStyle("-fx-text-fill: #86efac; -fx-font-size: 11px;");
+            } else {
+                priorityDescLabel.setText("🔵 NORMAL: Standard emergency message relay.");
+                priorityDescLabel.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px;");
+            }
+        });
+
         messageTextField = new TextField();
         messageTextField.setPromptText("Enter emergency alert or status details...");
+        messageTextField.setPrefWidth(320);
 
-        dispatchGrid.add(createFormLabel("Sender Node:"), 0, 0);
+        dispatchGrid.add(createFormLabel("Sender Node (Origin):"), 0, 0);
         dispatchGrid.add(senderComboBox, 1, 0);
-        dispatchGrid.add(createFormLabel("Priority:"), 2, 0);
-        dispatchGrid.add(priorityComboBox, 3, 0);
+        dispatchGrid.add(createFormLabel("Target Node (Recipient):"), 2, 0);
+        dispatchGrid.add(recipientComboBox, 3, 0);
 
-        dispatchGrid.add(createFormLabel("Target Node:"), 0, 1);
-        dispatchGrid.add(recipientComboBox, 1, 1);
-        dispatchGrid.add(createFormLabel("Payload:"), 2, 1);
+        dispatchGrid.add(createFormLabel("Transmission Priority:"), 0, 1);
+        VBox priorityBox = new VBox(4, priorityComboBox, priorityDescLabel);
+        dispatchGrid.add(priorityBox, 1, 1);
+
+        dispatchGrid.add(createFormLabel("Alert Message Content:"), 2, 1);
         dispatchGrid.add(messageTextField, 3, 1);
 
         // Quick Preset Chips
-        HBox presetRow = new HBox(6);
+        HBox presetRow = new HBox(8);
         presetRow.setAlignment(Pos.CENTER_LEFT);
-        Label quickLbl = new Label("Quick Presets:");
-        quickLbl.setStyle("-fx-text-fill: #64748b; -fx-font-size: 11px;");
+        Label quickLbl = new Label("1-Click Disaster Presets:");
+        quickLbl.setStyle("-fx-text-fill: #64748b; -fx-font-size: 11px; -fx-font-weight: 700;");
 
         Button presetMed = new Button("🏥 Medical Aid");
         presetMed.getStyleClass().add("btn-preset");
-        presetMed.setOnAction(e -> messageTextField.setText("URGENT: Medical assistance requested at Quad Block 4"));
+        presetMed.setOnAction(e -> {
+            messageTextField.setText("URGENT: Medical assistance requested at Quad Block 4");
+            priorityComboBox.setValue(Priority.HIGH);
+        });
 
         Button presetSec = new Button("⚠️ Hazard Alert");
         presetSec.getStyleClass().add("btn-preset");
-        presetSec.setOnAction(e -> messageTextField.setText("HAZARD: Structural blockage reported near Gate 2"));
+        presetSec.setOnAction(e -> {
+            messageTextField.setText("HAZARD: Structural blockage reported near Gate 2");
+            priorityComboBox.setValue(Priority.NORMAL);
+        });
 
-        Button presetPing = new Button("ℹ️ Node Ping");
+        Button presetPing = new Button("ℹ️ Node Heartbeat");
         presetPing.getStyleClass().add("btn-preset");
-        presetPing.setOnAction(e -> messageTextField.setText("STATUS: Node heartbeat and path liveness ping"));
+        presetPing.setOnAction(e -> {
+            messageTextField.setText("STATUS: Node heartbeat and path liveness ping");
+            priorityComboBox.setValue(Priority.LOW);
+        });
 
         presetRow.getChildren().addAll(quickLbl, presetMed, presetSec, presetPing);
 
@@ -672,11 +946,15 @@ public class App extends Application {
         dispatchBtn.setOnAction(e -> handleSendMessage());
 
         dispatchCard.getChildren().addAll(dispatchGrid, presetRow, dispatchBtn);
+        view.getChildren().add(dispatchCard);
 
-        // Card 2: Live Propagation Outcome & Breadcrumb Hop Route
-        outcomeCard = createCard("Simulation Delivery Outcome", "BFS shortest-path discovery & energy consumption analysis");
-        outcomeCard.getStyleClass().clear();
-        outcomeCard.getStyleClass().add("dash-card-highlight");
+        return view;
+    }
+
+    private VBox createOutcomeCard() {
+        VBox card = createCard("Simulation Delivery Outcome", "BFS shortest-path discovery & energy consumption analysis");
+        card.getStyleClass().clear();
+        card.getStyleClass().add("dash-card-highlight");
 
         HBox outcomeStatusRow = new HBox(10);
         outcomeStatusRow.setAlignment(Pos.CENTER_LEFT);
@@ -690,17 +968,24 @@ public class App extends Application {
         Region outcomeSpacer = new Region();
         HBox.setHgrow(outcomeSpacer, javafx.scene.layout.Priority.ALWAYS);
 
-        replayFromOutcomeBtn = new Button("🎬 Replay Transmission");
-        replayFromOutcomeBtn.setStyle("-fx-background-color: #0e223d; -fx-text-fill: #38bdf8; -fx-font-size: 11px; -fx-font-weight: bold; -fx-border-color: #0284c7; -fx-border-radius: 5px; -fx-padding: 3 9; -fx-cursor: hand;");
+        replayFromOutcomeBtn = new Button("🎬 Watch Replay on Canvas");
+        replayFromOutcomeBtn.setStyle("-fx-background-color: #0e223d; -fx-text-fill: #38bdf8; -fx-font-size: 11px; -fx-font-weight: bold; -fx-border-color: #0284c7; -fx-border-radius: 5px; -fx-padding: 4 10; -fx-cursor: hand;");
         replayFromOutcomeBtn.setDisable(true);
         replayFromOutcomeBtn.setOnAction(e -> {
-            if (!simulationHistory.isEmpty()) {
+            showView(networkScrollPane, navNetworkBtn);
+            if (networkTabPane != null) {
                 networkTabPane.getSelectionModel().select(topologyTab);
+            }
+            if (topologyPane != null) {
                 topologyPane.playReplay();
             }
         });
 
-        outcomeStatusRow.getChildren().addAll(outcomeTitle, resultBadge, outcomeSpacer, replayFromOutcomeBtn);
+        viewTimelineFromOutcomeBtn = new Button("⏱️ View Timeline");
+        viewTimelineFromOutcomeBtn.getStyleClass().add("btn-ghost");
+        viewTimelineFromOutcomeBtn.setOnAction(e -> showView(activityScrollPane, navActivityBtn));
+
+        outcomeStatusRow.getChildren().addAll(outcomeTitle, resultBadge, outcomeSpacer, replayFromOutcomeBtn, viewTimelineFromOutcomeBtn);
 
         // Breadcrumb Trail
         VBox routeSection = new VBox(6);
@@ -723,31 +1008,30 @@ public class App extends Application {
         resultExplanationLabel.setStyle("-fx-text-fill: #cbd5e1; -fx-font-size: 12px; -fx-line-spacing: 2px;");
         resultExplanationLabel.setWrapText(true);
 
-        outcomeCard.getChildren().addAll(outcomeStatusRow, routeSection, resultExplanationLabel);
+        // Collapsible Technical Diagnostics
+        toggleTechDetailsBtn = new Button("🔍 [ Show Technical Route Details ]");
+        toggleTechDetailsBtn.getStyleClass().add("btn-ghost");
+        toggleTechDetailsBtn.setStyle("-fx-font-size: 10px; -fx-padding: 3 8;");
 
-        // Card 3: Terminal Activity Feed
-        VBox logCard = createCard("Terminal Activity Feed", "Real-time system events, dispatches, and link changes");
-        VBox.setVgrow(logCard, javafx.scene.layout.Priority.ALWAYS);
+        technicalDetailsBox = new VBox(6);
+        technicalDetailsBox.getStyleClass().add("tech-details-box");
+        technicalDetailsBox.setVisible(false);
+        technicalDetailsBox.setManaged(false);
 
-        activityFeedArea = new TextArea();
-        activityFeedArea.setEditable(false);
-        activityFeedArea.setWrapText(true);
-        activityFeedArea.getStyleClass().add("terminal-area");
-        activityFeedArea.setPrefHeight(180);
-        VBox.setVgrow(activityFeedArea, javafx.scene.layout.Priority.ALWAYS);
+        technicalDetailsContent = new Label("No simulation executed yet.");
+        technicalDetailsContent.setStyle("-fx-text-fill: #94a3b8; -fx-font-family: monospace; -fx-font-size: 11px;");
+        technicalDetailsContent.setWrapText(true);
+        technicalDetailsBox.getChildren().add(technicalDetailsContent);
 
-        HBox logActionRow = new HBox(10);
-        logActionRow.setAlignment(Pos.CENTER_RIGHT);
+        toggleTechDetailsBtn.setOnAction(e -> {
+            techDetailsVisible = !techDetailsVisible;
+            technicalDetailsBox.setVisible(techDetailsVisible);
+            technicalDetailsBox.setManaged(techDetailsVisible);
+            toggleTechDetailsBtn.setText(techDetailsVisible ? "🔍 [ Hide Technical Route Details ]" : "🔍 [ Show Technical Route Details ]");
+        });
 
-        Button clearLogBtn = new Button("Clear Feed");
-        clearLogBtn.getStyleClass().add("btn-ghost");
-        clearLogBtn.setOnAction(e -> activityFeedArea.clear());
-
-        logActionRow.getChildren().add(clearLogBtn);
-        logCard.getChildren().addAll(activityFeedArea, logActionRow);
-
-        col.getChildren().addAll(dispatchCard, outcomeCard, logCard);
-        return col;
+        card.getChildren().addAll(outcomeStatusRow, routeSection, resultExplanationLabel, toggleTechDetailsBtn, technicalDetailsBox);
+        return card;
     }
 
     private void renderEmptyRoute() {
@@ -783,308 +1067,23 @@ public class App extends Application {
     }
 
     // --------------------------------------------------------------------------
-    // 5. Simulation Handlers & Validation
+    // 5. View 4: 📜 Activity History & Event Timeline Workspace
     // --------------------------------------------------------------------------
-    private void handleSendMessage() {
-        CommunicationDevice sender = senderComboBox.getValue();
-        CommunicationDevice recipient = recipientComboBox.getValue();
-        Priority priority = priorityComboBox.getValue();
-        String content = messageTextField.getText();
+    private VBox createActivityView() {
+        VBox view = new VBox(16);
+        view.setPadding(new Insets(18, 22, 22, 22));
 
-        if (sender == null || recipient == null) {
-            showAlert("Incomplete Form", "Please select both a Sender node and a Target node.");
-            return;
-        }
+        // Header
+        view.getChildren().add(createSectionHeader("Simulation History & Activity Logs",
+                "Non-destructive historical replay, discrete event milestone timeline, and real-time terminal audit feed"));
 
-        if (sender.equals(recipient)) {
-            showAlert("Invalid Route", "Sender and Target cannot be the same device. Please select two distinct nodes.");
-            return;
-        }
+        // Historical Run Selection Bar
+        HBox historyBar = new HBox(12);
+        historyBar.setAlignment(Pos.CENTER_LEFT);
+        historyBar.setStyle("-fx-background-color: #0b1324; -fx-background-radius: 8px; -fx-padding: 10px 14px; -fx-border-color: #192742; -fx-border-radius: 8px;");
 
-        if (content == null || content.trim().isEmpty()) {
-            content = "Emergency broadcast from " + sender.getName();
-        }
-
-        String msgId = "MSG-" + (messageCounter++);
-        totalMessagesDispatched++;
-
-        // Reset previous route visualization before dispatching new simulation
-        if (topologyPane != null) {
-            topologyPane.clearRouteHighlight();
-        }
-
-        EmergencyMessage message = new EmergencyMessage(msgId, sender, recipient, content.trim(), priority);
-        log("DISPATCH", String.format("[%s] Initiated from '%s' to '%s' | Priority: %s", msgId, sender.getName(), recipient.getName(), priority));
-
-        // Call SimulationEngine
-        SimulationResult result = engine.send(message);
-
-        // Update Visual Outcome & Topology Graph Highlighting
-        if (result.delivered()) {
-            successfulDeliveries++;
-            int hops = Math.max(0, result.route().size() - 1);
-            resultBadge.setText("✔ DELIVERED (" + hops + " HOPS)");
-            resultBadge.setStyle("-fx-background-color: #064e3b; -fx-text-fill: #34d399; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px; -fx-border-color: #059669; -fx-border-radius: 4px;");
-
-            renderHopRoute(result.route());
-            if (topologyPane != null) {
-                topologyPane.highlightRoute(result.route());
-            }
-            resultExplanationLabel.setText(result.explanation() + "\n⚡ Impact: -2.0% battery deducted from all nodes along the transmission path.");
-
-            String routeStr = result.route().stream().map(CommunicationDevice::getName).collect(Collectors.joining(" -> "));
-            log("SUCCESS", String.format("[%s] Successfully delivered via %d hops: %s", msgId, hops, routeStr));
-        } else {
-            resultBadge.setText("✖ DELIVERY FAILED");
-            resultBadge.setStyle("-fx-background-color: #450a0a; -fx-text-fill: #f87171; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px; -fx-border-color: #dc2626; -fx-border-radius: 4px;");
-
-            renderHopRoute(result.route());
-            if (topologyPane != null) {
-                topologyPane.clearRouteHighlight();
-            }
-            resultExplanationLabel.setText(result.explanation() + "\n💡 Diagnostic: Verify if intermediate nodes are offline, depleted of battery, or restricted from forwarding this priority.");
-
-            log("FAILED", String.format("[%s] Delivery failed. Reason: %s", msgId, result.explanation()));
-        }
-
-        // Step 11: Timeline and Historical Recording
-        SimulationTimeline timeline = SimulationTimeline.fromSimulation(message, result);
-        SimulationRecord record = new SimulationRecord(message, result, timeline);
-        simulationHistory.add(0, record);
-
-        if (historyComboBox != null) {
-            historyComboBox.setValue(record);
-        }
-        currentTimelineEvents.setAll(timeline.getEvents());
-        updateTimelineDetails(record);
-
-        if (replayFromOutcomeBtn != null) {
-            replayFromOutcomeBtn.setDisable(false);
-        }
-
-        if (topologyPane != null) {
-            topologyPane.loadReplay(record);
-        }
-
-        refreshUI();
-    }
-
-    private void handleToggleStatus() {
-        CommunicationDevice dev = selectedDeviceComboBox.getValue();
-        if (dev == null) {
-            showAlert("No Selection", "Please select a device to toggle its operational state.");
-            return;
-        }
-
-        if (dev.getStatus() == DeviceStatus.OFFLINE) {
-            if (dev.getBatteryLevel() <= 0) {
-                showAlert("Battery Depleted", "Cannot turn device online: Battery is 0%. Please use 'Recharge (100%)' first.");
-                log("NODE", "Cannot bring " + dev.getName() + " online: 0% battery.");
-                return;
-            }
-            dev.setStatus(dev.getBatteryLevel() <= CommunicationDevice.LOW_BATTERY_THRESHOLD
-                    ? DeviceStatus.LOW_BATTERY : DeviceStatus.ACTIVE);
-            log("NODE", "Device '" + dev.getName() + "' is now ONLINE (" + dev.getStatus() + ").");
-        } else {
-            dev.setStatus(DeviceStatus.OFFLINE);
-            log("NODE", "Device '" + dev.getName() + "' is now OFFLINE.");
-        }
-
-        updateToggleState(dev);
-        refreshUI();
-    }
-
-    private void handleRecharge() {
-        CommunicationDevice dev = selectedDeviceComboBox.getValue();
-        if (dev == null) {
-            showAlert("No Selection", "Please select a device to recharge.");
-            return;
-        }
-
-        dev.recharge(100.0);
-        log("NODE", "Device '" + dev.getName() + "' battery recharged to 100% (ACTIVE).");
-        updateToggleState(dev);
-        refreshUI();
-    }
-
-    private void handleAddDevice() {
-        String name = addDeviceNameField.getText();
-        String type = addDeviceTypeSelect.getValue();
-
-        if (name == null || name.trim().isEmpty()) {
-            name = type + " #" + deviceIdCounter;
-        }
-
-        String id = "DEV-" + (deviceIdCounter++);
-        Location loc = new Location((deviceIdCounter * 14) % 100, (deviceIdCounter * 20) % 100);
-
-        CommunicationDevice newDev;
-        if ("Security Station".equals(type)) {
-            newDev = new SecurityStation(id, name.trim(), loc, 100.0);
-        } else if ("Medical Station".equals(type)) {
-            newDev = new MedicalStation(id, name.trim(), loc, 100.0);
-        } else {
-            newDev = new StudentPhone(id, name.trim(), loc, 100.0);
-        }
-
-        graph.addDevice(newDev);
-        addDeviceNameField.clear();
-        refreshUI();
-
-        log("NODE", "Registered new " + type + ": '" + newDev.getName() + "' [" + newDev.getId() + "] at " + loc);
-    }
-
-    private void handleConnectDevices() {
-        CommunicationDevice devA = linkDeviceAComboBox.getValue();
-        CommunicationDevice devB = linkDeviceBComboBox.getValue();
-
-        if (devA == null || devB == null) {
-            showAlert("Selection Missing", "Please select both devices to establish a mesh link.");
-            return;
-        }
-
-        if (devA.equals(devB)) {
-            showAlert("Invalid Connection", "Cannot connect a device to itself. Select two different nodes.");
-            return;
-        }
-
-        boolean connected = graph.connect(devA, devB);
-        if (connected) {
-            refreshUI();
-            log("LINK", String.format("Established mesh link: '%s' <───> '%s'", devA.getName(), devB.getName()));
-        } else {
-            showAlert("Already Linked", "Devices '" + devA.getName() + "' and '" + devB.getName() + "' are already directly connected.");
-        }
-    }
-
-    // --------------------------------------------------------------------------
-    // 6. Network Configuration Persistence & Simulation Lifecycle
-    // --------------------------------------------------------------------------
-    private void handleSaveNetwork() {
-        if (graph.getDeviceCount() == 0) {
-            showAlert("Cannot Save", "The network is empty. Register at least one device before saving.");
-            return;
-        }
-
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Save ResQMesh Network Topology");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Configuration Files (*.json)", "*.json"));
-        fileChooser.setInitialFileName("resqmesh-network.json");
-
-        File file = fileChooser.showSaveDialog(null);
-        if (file != null) {
-            try {
-                NetworkConfigManager.saveToFile(graph, file, "ResQMesh Simulation Topology");
-                log("CONFIG", String.format("Saved network configuration (%d nodes, %d links) to '%s'",
-                        graph.getDeviceCount(), graph.getTotalLinkCount() / 2, file.getName()));
-                showAlert("Network Saved", String.format("Successfully saved %d devices and %d connections to:\n%s",
-                        graph.getDeviceCount(), graph.getTotalLinkCount() / 2, file.getAbsolutePath()));
-            } catch (Exception ex) {
-                log("ERROR", "Failed to save configuration: " + ex.getMessage());
-                showAlert("Save Failed", "Could not write configuration to disk:\n" + ex.getMessage());
-            }
-        }
-    }
-
-    private void handleLoadNetwork() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Load ResQMesh Network Topology");
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Configuration Files (*.json)", "*.json"));
-
-        File file = fileChooser.showOpenDialog(null);
-        if (file != null) {
-            try {
-                // Clear previous simulation outcomes & route highlights prior to loading new config
-                if (topologyPane != null) {
-                    topologyPane.resetReplay();
-                    topologyPane.clearRouteHighlight();
-                }
-                if (replayFromOutcomeBtn != null) {
-                    replayFromOutcomeBtn.setDisable(true);
-                }
-                renderEmptyRoute();
-                resultBadge.setText("WAITING FOR DISPATCH");
-                resultBadge.setStyle("-fx-background-color: #1e293b; -fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px;");
-                resultExplanationLabel.setText("Loaded new network configuration. Ready for simulation dispatch.");
-
-                NetworkConfigManager.loadFromFile(file, graph);
-
-                // Update device counter to prevent ID collisions on new device additions
-                deviceIdCounter = Math.max(deviceIdCounter, graph.getDeviceCount() + 1);
-
-                refreshUI();
-
-                // Select first device if available
-                if (!graph.getAllDevices().isEmpty()) {
-                    List<CommunicationDevice> list = new ArrayList<>(graph.getAllDevices());
-                    CommunicationDevice first = list.get(0);
-                    selectedDeviceComboBox.setValue(first);
-                    senderComboBox.setValue(first);
-                    if (list.size() > 1) {
-                        recipientComboBox.setValue(list.get(1));
-                    }
-                    if (topologyPane != null) {
-                        topologyPane.selectDevice(first);
-                    }
-                }
-
-                log("CONFIG", String.format("Loaded network topology from '%s': %d nodes, %d links.",
-                        file.getName(), graph.getDeviceCount(), graph.getTotalLinkCount() / 2));
-                showAlert("Network Loaded", String.format("Successfully loaded configuration '%s':\n• %d Devices Registered\n• %d Active Mesh Connections",
-                        file.getName(), graph.getDeviceCount(), graph.getTotalLinkCount() / 2));
-            } catch (ConfigurationException ex) {
-                log("ERROR", "Invalid configuration file: " + ex.getMessage());
-                showAlert("Configuration Validation Error", "The selected file is not a valid ResQMesh configuration:\n\n" + ex.getMessage());
-            } catch (Exception ex) {
-                log("ERROR", "Failed to load configuration file: " + ex.getMessage());
-                showAlert("Load Failed", "Error reading configuration file:\n\n" + ex.getMessage());
-            }
-        }
-    }
-
-    private void handleNewSimulation() {
-        totalMessagesDispatched = 0;
-        successfulDeliveries = 0;
-        messageCounter = 1;
-
-        if (topologyPane != null) {
-            topologyPane.resetReplay();
-            topologyPane.clearRouteHighlight();
-        }
-        if (replayFromOutcomeBtn != null) {
-            replayFromOutcomeBtn.setDisable(true);
-        }
-        renderEmptyRoute();
-        resultBadge.setText("WAITING FOR DISPATCH");
-        resultBadge.setStyle("-fx-background-color: #1e293b; -fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px;");
-        resultExplanationLabel.setText("New simulation initiated. All devices recharged to 100% and delivery metrics reset.");
-
-        // Recharge all nodes in current network to 100% active state
-        for (CommunicationDevice dev : graph.getAllDevices()) {
-            dev.recharge(100.0);
-        }
-
-        refreshUI();
-
-        log("SIMULATION", "Started new simulation session. All devices recharged to 100% and transmission counters reset.");
-    }
-
-    // --------------------------------------------------------------------------
-    // Step 11: Event Timeline & Simulation History Workspace
-    // --------------------------------------------------------------------------
-    private VBox createTimelinePanel() {
-        VBox container = new VBox(12);
-        container.setPadding(new Insets(12));
-        container.setStyle("-fx-background-color: #070c17; -fx-background-radius: 10px; -fx-border-color: #192742; -fx-border-radius: 10px;");
-        container.setPrefHeight(340);
-        container.setMinHeight(280);
-
-        // Header: History selection and replay trigger
-        HBox header = new HBox(12);
-        header.setAlignment(Pos.CENTER_LEFT);
-
-        Label selectLbl = new Label("Simulation Run:");
-        selectLbl.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 700;");
+        Label historyLbl = new Label("Simulation Run:");
+        historyLbl.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 700;");
 
         historyComboBox = new ComboBox<>();
         historyComboBox.setItems(simulationHistory);
@@ -1102,24 +1101,54 @@ public class App extends Application {
             }
         });
 
-        Button watchOnCanvasBtn = new Button("🎬 Watch Replay on Canvas");
-        watchOnCanvasBtn.setStyle("-fx-background-color: #0284c7; -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 5 12; -fx-background-radius: 6px; -fx-cursor: hand;");
-        watchOnCanvasBtn.setOnAction(e -> {
+        Button replayHistoryBtn = new Button("🎬 Watch Replay on Canvas");
+        replayHistoryBtn.getStyleClass().add("btn-cyan");
+        replayHistoryBtn.setOnAction(e -> {
             SimulationRecord sel = historyComboBox.getValue();
             if (sel != null) {
-                networkTabPane.getSelectionModel().select(topologyTab);
-                topologyPane.playReplay();
+                showView(networkScrollPane, navNetworkBtn);
+                if (networkTabPane != null) {
+                    networkTabPane.getSelectionModel().select(topologyTab);
+                }
+                if (topologyPane != null) {
+                    topologyPane.playReplay();
+                }
             } else {
-                showAlert("No Simulation Selected", "Please select a recorded simulation from the history dropdown.");
+                showAlert("No Simulation Selected", "Please select a recorded simulation run from the dropdown first.");
             }
         });
 
         timelineSummaryLabel = new Label("Dispatched emergency transmissions will record discrete milestone events here.");
         timelineSummaryLabel.setStyle("-fx-text-fill: #38bdf8; -fx-font-size: 11px; -fx-font-weight: 600;");
 
-        header.getChildren().addAll(selectLbl, historyComboBox, watchOnCanvasBtn, timelineSummaryLabel);
+        historyBar.getChildren().addAll(historyLbl, historyComboBox, replayHistoryBtn, timelineSummaryLabel);
+        view.getChildren().add(historyBar);
 
-        // TableView for Timeline Events
+        // Tabbed Activity Workspace: Timeline Table vs Live Terminal
+        TabPane activityTabs = new TabPane();
+        activityTabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+        VBox.setVgrow(activityTabs, javafx.scene.layout.Priority.ALWAYS);
+
+        // Tab 1: Event Timeline
+        VBox timelineTabContent = createTimelinePanel();
+        Tab timelineSubTab = new Tab("⏱️ Step-by-Step Event Timeline", timelineTabContent);
+
+        // Tab 2: Terminal Logs
+        VBox terminalTabContent = createTerminalLogsPanel();
+        Tab terminalSubTab = new Tab("📜 Terminal Activity Feed", terminalTabContent);
+
+        activityTabs.getTabs().addAll(timelineSubTab, terminalSubTab);
+        view.getChildren().add(activityTabs);
+
+        return view;
+    }
+
+    private VBox createTimelinePanel() {
+        VBox container = new VBox(10);
+        container.setPadding(new Insets(12));
+        container.setStyle("-fx-background-color: #070c17; -fx-background-radius: 10px; -fx-border-color: #192742; -fx-border-radius: 10px;");
+        container.setPrefHeight(380);
+
         timelineTable = new TableView<>();
         timelineTable.setItems(currentTimelineEvents);
         timelineTable.setPlaceholder(new Label("No simulation events recorded yet. Dispatch an alert to populate the timeline."));
@@ -1131,7 +1160,7 @@ public class App extends Application {
         seqCol.setCellValueFactory(new PropertyValueFactory<>("sequenceNumber"));
 
         TableColumn<SimulationEvent, String> elapsedCol = new TableColumn<>("Time");
-        elapsedCol.setPrefWidth(80);
+        elapsedCol.setPrefWidth(85);
         elapsedCol.setCellValueFactory(new PropertyValueFactory<>("formattedElapsed"));
         elapsedCol.setStyle("-fx-alignment: center; -fx-font-family: monospace; -fx-text-fill: #22d3ee; -fx-font-weight: bold;");
 
@@ -1196,14 +1225,38 @@ public class App extends Application {
             }
         });
 
-        container.getChildren().addAll(header, timelineTable, eventDetailLabel);
+        container.getChildren().addAll(timelineTable, eventDetailLabel);
+        return container;
+    }
+
+    private VBox createTerminalLogsPanel() {
+        VBox container = new VBox(10);
+        container.setPadding(new Insets(12));
+        container.setStyle("-fx-background-color: #070c17; -fx-background-radius: 10px; -fx-border-color: #192742; -fx-border-radius: 10px;");
+        container.setPrefHeight(380);
+
+        activityFeedArea = new TextArea();
+        activityFeedArea.setEditable(false);
+        activityFeedArea.setWrapText(true);
+        activityFeedArea.getStyleClass().add("terminal-area");
+        VBox.setVgrow(activityFeedArea, javafx.scene.layout.Priority.ALWAYS);
+
+        HBox logActionRow = new HBox(10);
+        logActionRow.setAlignment(Pos.CENTER_RIGHT);
+
+        Button clearLogBtn = new Button("Clear Feed");
+        clearLogBtn.getStyleClass().add("btn-ghost");
+        clearLogBtn.setOnAction(e -> activityFeedArea.clear());
+
+        logActionRow.getChildren().add(clearLogBtn);
+        container.getChildren().addAll(activityFeedArea, logActionRow);
         return container;
     }
 
     private void updateTimelineDetails(SimulationRecord record) {
         if (record == null) return;
         boolean delivered = record.isDelivered();
-        timelineSummaryLabel.setText(String.format("[%s] Priority: %s | %s | %d Events (%d ms)",
+        timelineSummaryLabel.setText(String.format("[%s] %s | %s | %d Events (%d ms)",
                 record.getId(),
                 record.getMessage().getPriority(),
                 delivered ? "✔ DELIVERED (" + record.getHopCount() + " hops)" : "✖ FAILED",
@@ -1217,7 +1270,332 @@ public class App extends Application {
     }
 
     // --------------------------------------------------------------------------
-    // 7. Helpers & Utilities
+    // 6. Action Handlers: Dispatch, Nodes, Links & Configurations
+    // --------------------------------------------------------------------------
+    private void handleSendMessage() {
+        CommunicationDevice sender = senderComboBox.getValue();
+        CommunicationDevice recipient = recipientComboBox.getValue();
+        Priority priority = priorityComboBox.getValue();
+        String content = messageTextField.getText();
+
+        if (sender == null || recipient == null) {
+            showAlert("Incomplete Form", "Please select both an Origin Sender node and a Target Recipient node.");
+            return;
+        }
+
+        if (sender.equals(recipient)) {
+            showAlert("Invalid Route", "Sender and Target cannot be the same device. Please select two distinct nodes.");
+            return;
+        }
+
+        if (content == null || content.trim().isEmpty()) {
+            content = "Emergency broadcast from " + sender.getName();
+        }
+
+        String msgId = "MSG-" + (messageCounter++);
+        totalMessagesDispatched++;
+
+        if (topologyPane != null) {
+            topologyPane.clearRouteHighlight();
+        }
+
+        EmergencyMessage message = new EmergencyMessage(msgId, sender, recipient, content.trim(), priority);
+        log("DISPATCH", String.format("[%s] Initiated from '%s' to '%s' | Priority: %s", msgId, sender.getName(), recipient.getName(), priority));
+
+        SimulationResult result = engine.send(message);
+
+        // Update Visual Outcome & Topology Graph Highlighting
+        if (result.delivered()) {
+            successfulDeliveries++;
+            int hops = Math.max(0, result.route().size() - 1);
+            resultBadge.setText("✔ DELIVERED (" + hops + " HOPS)");
+            resultBadge.setStyle("-fx-background-color: #064e3b; -fx-text-fill: #34d399; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px; -fx-border-color: #059669; -fx-border-radius: 4px;");
+
+            renderHopRoute(result.route());
+            if (topologyPane != null) {
+                topologyPane.highlightRoute(result.route());
+            }
+            resultExplanationLabel.setText(result.explanation() + "\n⚡ Impact: -2.0% battery deducted from all nodes along the transmission path.");
+
+            String routeStr = result.route().stream().map(CommunicationDevice::getName).collect(Collectors.joining(" -> "));
+            log("SUCCESS", String.format("[%s] Successfully delivered via %d hops: %s", msgId, hops, routeStr));
+
+            technicalDetailsContent.setText(String.format(
+                    "ALGORITHM: Breadcrumb BFS Shortest-Path Discovery\n" +
+                    "MESSAGE ID: %s | PRIORITY: %s\n" +
+                    "CALCULATED ROUTE (%d hops):\n  %s\n" +
+                    "BATTERY IMPACT: -2.0%% deducted per hop (%d nodes drained)\n" +
+                    "STATUS: Delivered successfully to destination.",
+                    msgId, priority, hops, routeStr, result.route().size()));
+        } else {
+            resultBadge.setText("✖ DELIVERY FAILED");
+            resultBadge.setStyle("-fx-background-color: #450a0a; -fx-text-fill: #f87171; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px; -fx-border-color: #dc2626; -fx-border-radius: 4px;");
+
+            renderHopRoute(result.route());
+            if (topologyPane != null) {
+                topologyPane.clearRouteHighlight();
+            }
+            resultExplanationLabel.setText(result.explanation() + "\n💡 Fix: Verify intermediate nodes are online, have sufficient battery (>0%), and can forward this priority.");
+
+            log("FAILED", String.format("[%s] Delivery failed. Reason: %s", msgId, result.explanation()));
+
+            technicalDetailsContent.setText(String.format(
+                    "ALGORITHM: Breadcrumb BFS Shortest-Path Discovery\n" +
+                    "MESSAGE ID: %s | PRIORITY: %s\n" +
+                    "FAILURE DIAGNOSTIC: %s\n" +
+                    "STATUS: BFS search completed without finding a viable route.",
+                    msgId, priority, result.explanation()));
+        }
+
+        // Timeline and Historical Recording
+        SimulationTimeline timeline = SimulationTimeline.fromSimulation(message, result);
+        SimulationRecord record = new SimulationRecord(message, result, timeline);
+        simulationHistory.add(0, record);
+
+        if (historyComboBox != null) {
+            historyComboBox.setValue(record);
+        }
+        currentTimelineEvents.setAll(timeline.getEvents());
+        updateTimelineDetails(record);
+
+        if (replayFromOutcomeBtn != null) {
+            replayFromOutcomeBtn.setDisable(false);
+        }
+
+        if (topologyPane != null) {
+            topologyPane.loadReplay(record);
+        }
+
+        refreshUI();
+    }
+
+    private void handleToggleStatus() {
+        CommunicationDevice dev = selectedDeviceComboBox.getValue();
+        if (dev == null) {
+            showAlert("No Selection", "Please select a device to toggle its operational state.");
+            return;
+        }
+
+        if (dev.getStatus() == DeviceStatus.OFFLINE) {
+            if (dev.getBatteryLevel() <= 0) {
+                showAlert("Battery Depleted", "Cannot turn device online: Battery is 0%. Please use 'Recharge to 100%' first.");
+                log("NODE", "Cannot bring " + dev.getName() + " online: 0% battery.");
+                return;
+            }
+            dev.setStatus(dev.getBatteryLevel() <= CommunicationDevice.LOW_BATTERY_THRESHOLD
+                    ? DeviceStatus.LOW_BATTERY : DeviceStatus.ACTIVE);
+            log("NODE", "Device '" + dev.getName() + "' is now ONLINE (" + dev.getStatus() + ").");
+        } else {
+            dev.setStatus(DeviceStatus.OFFLINE);
+            log("NODE", "Device '" + dev.getName() + "' is now OFFLINE.");
+        }
+
+        updateToggleState(dev);
+        refreshUI();
+    }
+
+    private void handleRecharge() {
+        CommunicationDevice dev = selectedDeviceComboBox.getValue();
+        if (dev == null) {
+            showAlert("No Selection", "Please select a device to recharge.");
+            return;
+        }
+
+        dev.recharge(100.0);
+        log("NODE", "Device '" + dev.getName() + "' battery recharged to 100% (ACTIVE).");
+        updateToggleState(dev);
+        refreshUI();
+    }
+
+    private void handleAddDevice() {
+        String name = addDeviceNameField.getText();
+        String type = addDeviceTypeSelect.getValue();
+
+        if (name == null || name.trim().isEmpty()) {
+            name = type + " #" + deviceIdCounter;
+        }
+
+        String id = "DEV-" + (deviceIdCounter++);
+        Location loc = new Location((deviceIdCounter * 14) % 100, (deviceIdCounter * 20) % 100);
+
+        CommunicationDevice newDev;
+        if ("Security Station".equals(type)) {
+            newDev = new SecurityStation(id, name.trim(), loc, 100.0);
+        } else if ("Medical Station".equals(type)) {
+            newDev = new MedicalStation(id, name.trim(), loc, 100.0);
+        } else {
+            newDev = new StudentPhone(id, name.trim(), loc, 100.0);
+        }
+
+        graph.addDevice(newDev);
+        addDeviceNameField.clear();
+        addDeviceFeedbackLabel.setText("✔ Registered " + type + ": '" + newDev.getName() + "' [" + newDev.getId() + "] successfully!");
+        addDeviceFeedbackLabel.setStyle("-fx-text-fill: #34d399;");
+
+        refreshUI();
+        selectedDeviceComboBox.setValue(newDev);
+
+        log("NODE", "Registered new " + type + ": '" + newDev.getName() + "' [" + newDev.getId() + "] at " + loc);
+    }
+
+    private void handleConnectDevices() {
+        CommunicationDevice devA = linkDeviceAComboBox.getValue();
+        CommunicationDevice devB = linkDeviceBComboBox.getValue();
+
+        if (devA == null || devB == null) {
+            connectFeedbackLabel.setText("⚠️ Please select both devices to establish a mesh link.");
+            connectFeedbackLabel.setStyle("-fx-text-fill: #f59e0b;");
+            return;
+        }
+
+        if (devA.equals(devB)) {
+            connectFeedbackLabel.setText("⚠️ Cannot connect a device to itself. Choose two distinct devices.");
+            connectFeedbackLabel.setStyle("-fx-text-fill: #f87171;");
+            return;
+        }
+
+        boolean connected = graph.connect(devA, devB);
+        if (connected) {
+            connectFeedbackLabel.setText("✔ Established mesh link: '" + devA.getName() + "' <───> '" + devB.getName() + "'");
+            connectFeedbackLabel.setStyle("-fx-text-fill: #34d399;");
+            refreshUI();
+            log("LINK", String.format("Established mesh link: '%s' <───> '%s'", devA.getName(), devB.getName()));
+        } else {
+            connectFeedbackLabel.setText("ℹ️ Devices '" + devA.getName() + "' and '" + devB.getName() + "' are already directly connected.");
+            connectFeedbackLabel.setStyle("-fx-text-fill: #38bdf8;");
+        }
+    }
+
+    private void handleSaveNetwork() {
+        if (graph.getDeviceCount() == 0) {
+            showAlert("Cannot Save", "The network is empty. Register at least one device before saving.");
+            return;
+        }
+
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Save ResQMesh Network Topology");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Configuration Files (*.json)", "*.json"));
+        fileChooser.setInitialFileName("resqmesh-network.json");
+
+        File file = fileChooser.showSaveDialog(null);
+        if (file != null) {
+            try {
+                NetworkConfigManager.saveToFile(graph, file, "ResQMesh Simulation Topology");
+                log("CONFIG", String.format("Saved network configuration (%d nodes, %d links) to '%s'",
+                        graph.getDeviceCount(), graph.getTotalLinkCount() / 2, file.getName()));
+                showAlert("Network Saved", String.format("Successfully saved %d devices and %d connections to:\n%s",
+                        graph.getDeviceCount(), graph.getTotalLinkCount() / 2, file.getAbsolutePath()));
+            } catch (Exception ex) {
+                log("ERROR", "Failed to save configuration: " + ex.getMessage());
+                showAlert("Save Failed", "Could not write configuration to disk:\n" + ex.getMessage());
+            }
+        }
+    }
+
+    private void handleLoadNetwork() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Load ResQMesh Network Topology");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("JSON Configuration Files (*.json)", "*.json"));
+
+        File file = fileChooser.showOpenDialog(null);
+        if (file != null) {
+            try {
+                if (topologyPane != null) {
+                    topologyPane.resetReplay();
+                    topologyPane.clearRouteHighlight();
+                }
+                if (replayFromOutcomeBtn != null) {
+                    replayFromOutcomeBtn.setDisable(true);
+                }
+                renderEmptyRoute();
+                resultBadge.setText("WAITING FOR DISPATCH");
+                resultBadge.setStyle("-fx-background-color: #1e293b; -fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px;");
+                resultExplanationLabel.setText("Loaded new network configuration. Ready for simulation dispatch.");
+
+                NetworkConfigManager.loadFromFile(file, graph);
+                deviceIdCounter = Math.max(deviceIdCounter, graph.getDeviceCount() + 1);
+
+                refreshUI();
+
+                if (!graph.getAllDevices().isEmpty()) {
+                    List<CommunicationDevice> list = new ArrayList<>(graph.getAllDevices());
+                    CommunicationDevice first = list.get(0);
+                    selectedDeviceComboBox.setValue(first);
+                    senderComboBox.setValue(first);
+                    if (list.size() > 1) {
+                        recipientComboBox.setValue(list.get(1));
+                    }
+                    if (topologyPane != null) {
+                        topologyPane.selectDevice(first);
+                    }
+                }
+
+                log("CONFIG", String.format("Loaded network topology from '%s': %d nodes, %d links.",
+                        file.getName(), graph.getDeviceCount(), graph.getTotalLinkCount() / 2));
+                showAlert("Network Loaded", String.format("Successfully loaded configuration '%s':\n• %d Devices Registered\n• %d Active Mesh Connections",
+                        file.getName(), graph.getDeviceCount(), graph.getTotalLinkCount() / 2));
+            } catch (ConfigurationException ex) {
+                log("ERROR", "Invalid configuration file: " + ex.getMessage());
+                showAlert("Configuration Validation Error", "The selected file is not a valid ResQMesh configuration:\n\n" + ex.getMessage());
+            } catch (Exception ex) {
+                log("ERROR", "Failed to load configuration file: " + ex.getMessage());
+                showAlert("Load Failed", "Error reading configuration file:\n\n" + ex.getMessage());
+            }
+        }
+    }
+
+    private void handleNewSimulation() {
+        totalMessagesDispatched = 0;
+        successfulDeliveries = 0;
+        messageCounter = 1;
+
+        if (topologyPane != null) {
+            topologyPane.resetReplay();
+            topologyPane.clearRouteHighlight();
+        }
+        if (replayFromOutcomeBtn != null) {
+            replayFromOutcomeBtn.setDisable(true);
+        }
+        renderEmptyRoute();
+        resultBadge.setText("WAITING FOR DISPATCH");
+        resultBadge.setStyle("-fx-background-color: #1e293b; -fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px;");
+        resultExplanationLabel.setText("New simulation initiated. All devices recharged to 100% and delivery metrics reset.");
+
+        for (CommunicationDevice dev : graph.getAllDevices()) {
+            dev.recharge(100.0);
+        }
+
+        refreshUI();
+        log("SIMULATION", "Started new simulation session. All devices recharged to 100% and transmission counters reset.");
+    }
+
+    private void updateToggleState(CommunicationDevice dev) {
+        if (dev == null) {
+            dynamicToggleBtn.setText("Toggle Online / Offline");
+            dynamicToggleBtn.setStyle("");
+            if (selectedDeviceStatusLabel != null) selectedDeviceStatusLabel.setText("");
+            return;
+        }
+
+        if (dev.getStatus() == DeviceStatus.OFFLINE) {
+            dynamicToggleBtn.setText("🟢 Bring ONLINE");
+            dynamicToggleBtn.setStyle("-fx-background-color: #059669; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; -fx-background-radius: 6px;");
+            if (selectedDeviceStatusLabel != null) {
+                selectedDeviceStatusLabel.setText("Status: 🔴 OFFLINE (" + String.format("%.0f%%", dev.getBatteryLevel()) + ")");
+                selectedDeviceStatusLabel.setStyle("-fx-text-fill: #f87171; -fx-font-size: 11px;");
+            }
+        } else {
+            dynamicToggleBtn.setText("🔴 Take OFFLINE");
+            dynamicToggleBtn.setStyle("-fx-background-color: #e11d48; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; -fx-background-radius: 6px;");
+            if (selectedDeviceStatusLabel != null) {
+                selectedDeviceStatusLabel.setText("Status: 🟢 ONLINE (" + String.format("%.0f%%", dev.getBatteryLevel()) + ")");
+                selectedDeviceStatusLabel.setStyle("-fx-text-fill: #34d399; -fx-font-size: 11px;");
+            }
+        }
+    }
+
+    // --------------------------------------------------------------------------
+    // 7. Helpers & State Synchronization
     // --------------------------------------------------------------------------
     private void loadSampleNetwork() {
         graph.clear();
@@ -1256,13 +1634,16 @@ public class App extends Application {
 
     private void refreshUI() {
         deviceObservableList.setAll(graph.getAllDevices());
-        deviceTable.refresh();
+        if (deviceTable != null) {
+            deviceTable.refresh();
+        }
         if (topologyPane != null) {
             topologyPane.refresh();
         }
 
         int totalDevices = graph.getDeviceCount();
         long activeDevices = graph.getAllDevices().stream().filter(CommunicationDevice::isAvailable).count();
+        long offlineDevices = totalDevices - activeDevices;
         int totalLinks = graph.getTotalLinkCount() / 2;
 
         kpiTotalNodesLabel.setText(String.valueOf(totalDevices));
@@ -1276,9 +1657,65 @@ public class App extends Application {
             kpiSuccessRateLabel.setText("0 (0%)");
         }
 
+        // Update Dashboard Architecture Overview
+        long phoneCount = graph.getAllDevices().stream().filter(d -> d instanceof StudentPhone).count();
+        long secCount = graph.getAllDevices().stream().filter(d -> d instanceof SecurityStation).count();
+        long medCount = graph.getAllDevices().stream().filter(d -> d instanceof MedicalStation).count();
+
+        if (dashboardPhonesCountLabel != null) dashboardPhonesCountLabel.setText(String.valueOf(phoneCount));
+        if (dashboardSecurityCountLabel != null) dashboardSecurityCountLabel.setText(String.valueOf(secCount));
+        if (dashboardMedicalCountLabel != null) dashboardMedicalCountLabel.setText(String.valueOf(medCount));
+        if (dashboardActiveOnlineCountLabel != null) dashboardActiveOnlineCountLabel.setText(activeDevices + " Nodes Active");
+        if (dashboardOfflineCountLabel != null) dashboardOfflineCountLabel.setText(offlineDevices + " Offline");
+
         // Sync sidebar telemetry
         sidebarActiveNodesCountLabel.setText("Active Nodes: " + activeDevices + " / " + totalDevices);
         sidebarLinksCountLabel.setText("Mesh Density: " + totalLinks + " Links");
+
+        // Update Guided Workflow Stepper Badges
+        if (step1StatusLabel != null) {
+            if (totalDevices < 2) {
+                step1StatusLabel.setText("⚠️ " + totalDevices + " Added (Need ≥2)");
+                step1StatusLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: 700; -fx-text-fill: #f59e0b;");
+            } else {
+                step1StatusLabel.setText("✔ " + totalDevices + " Registered");
+                step1StatusLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: 700; -fx-text-fill: #34d399;");
+            }
+        }
+
+        if (step2StatusLabel != null) {
+            if (totalLinks < 1) {
+                step2StatusLabel.setText("⚠️ 0 Links (Disconnected)");
+                step2StatusLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: 700; -fx-text-fill: #f59e0b;");
+            } else {
+                step2StatusLabel.setText("✔ " + totalLinks + " Links Active");
+                step2StatusLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: 700; -fx-text-fill: #34d399;");
+            }
+        }
+
+        if (step3StatusLabel != null) {
+            if (totalDevices >= 2 && totalLinks >= 1 && activeDevices >= 2) {
+                step3StatusLabel.setText("⚡ Ready to Dispatch");
+                step3StatusLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: 700; -fx-text-fill: #22d3ee;");
+            } else {
+                step3StatusLabel.setText("⏳ Setup Incomplete");
+                step3StatusLabel.setStyle("-fx-font-size: 10px; -fx-font-weight: 700; -fx-text-fill: #94a3b8;");
+            }
+        }
+
+        // Update Contextual Dispatch Guidance Banner
+        if (dispatchGuidanceBanner != null && dispatchGuidanceLabel != null) {
+            if (totalDevices < 2) {
+                dispatchGuidanceBanner.getStyleClass().setAll("guide-banner-warning");
+                dispatchGuidanceLabel.setText("⚠️ Setup Incomplete: You need at least 2 registered devices in the network before dispatching an alert. Click 'Network & Devices' in the sidebar to add nodes.");
+            } else if (totalLinks < 1) {
+                dispatchGuidanceBanner.getStyleClass().setAll("guide-banner-warning");
+                dispatchGuidanceLabel.setText("⚠️ Mesh Disconnected: Registered devices currently have no active links between them. Connect devices in 'Network & Devices' to establish communication paths.");
+            } else {
+                dispatchGuidanceBanner.getStyleClass().setAll("guide-banner");
+                dispatchGuidanceLabel.setText("💡 Routing Tip: Emergency alerts propagate along the shortest active path discovered via BFS. Participating nodes deduct -2.0% battery per hop.");
+            }
+        }
     }
 
     private ComboBox<CommunicationDevice> createDeviceComboBox() {
@@ -1300,7 +1737,7 @@ public class App extends Application {
     }
 
     private VBox createCard(String title, String subtitle) {
-        VBox card = new VBox(6);
+        VBox card = new VBox(8);
         card.getStyleClass().add("dash-card");
 
         VBox titleBox = new VBox(2);
@@ -1316,6 +1753,16 @@ public class App extends Application {
         return card;
     }
 
+    private VBox createSectionHeader(String title, String subtitle) {
+        VBox header = new VBox(3);
+        Label t = new Label(title);
+        t.getStyleClass().add("section-header-title");
+        Label s = new Label(subtitle);
+        s.getStyleClass().add("section-header-subtitle");
+        header.getChildren().addAll(t, s);
+        return header;
+    }
+
     private Label createFormLabel(String text) {
         Label lbl = new Label(text);
         lbl.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: 700;");
@@ -1324,7 +1771,9 @@ public class App extends Application {
 
     private void log(String category, String message) {
         String timestamp = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
-        activityFeedArea.appendText(String.format("[%s] [%-8s] %s\n", timestamp, category, message));
+        if (activityFeedArea != null) {
+            activityFeedArea.appendText(String.format("[%s] [%-8s] %s\n", timestamp, category, message));
+        }
     }
 
     private void showAlert(String header, String content) {

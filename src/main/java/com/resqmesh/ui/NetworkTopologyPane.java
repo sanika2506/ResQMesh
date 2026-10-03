@@ -672,9 +672,9 @@ public class NetworkTopologyPane extends StackPane {
         double h = getHeight() > 0 ? getHeight() : 340;
 
         double centerX = w / 2.0;
-        double centerY = h / 2.0;
-        double radiusX = Math.max(120, (w / 2.0) - 100);
-        double radiusY = Math.max(90, (h / 2.0) - 70);
+        double centerY = (h / 2.0) - 5;
+        double radiusX = Math.max(130, Math.min(270, (w / 2.0) - 120));
+        double radiusY = Math.max(80, Math.min(160, (h / 2.0) - 85));
 
         int count = devices.size();
         for (int i = 0; i < count; i++) {
@@ -694,9 +694,9 @@ public class NetworkTopologyPane extends StackPane {
         if (w <= 0 || h <= 0) return;
 
         double centerX = w / 2.0;
-        double centerY = h / 2.0;
-        double radiusX = Math.max(120, (w / 2.0) - 110);
-        double radiusY = Math.max(80, (h / 2.0) - 70);
+        double centerY = (h / 2.0) - 5;
+        double radiusX = Math.max(130, Math.min(270, (w / 2.0) - 120));
+        double radiusY = Math.max(80, Math.min(160, (h / 2.0) - 85));
 
         List<CommunicationDevice> devices = new ArrayList<>(graph.getAllDevices());
         int count = devices.size();
@@ -881,7 +881,7 @@ public class NetworkTopologyPane extends StackPane {
 
             // Bottom Name Label
             nameLabel = new Label(device.getName());
-            nameLabel.setStyle("-fx-text-fill: #f1f5f9; -fx-font-size: 11px; -fx-font-weight: 600; -fx-effect: dropshadow(one-pass-box, black, 4, 0, 0, 1);");
+            nameLabel.setStyle("-fx-text-fill: #f1f5f9; -fx-font-size: 11px; -fx-font-weight: 600; -fx-background-color: rgba(7, 11, 22, 0.85); -fx-background-radius: 4px; -fx-padding: 1px 6px; -fx-border-color: rgba(30, 58, 95, 0.45); -fx-border-radius: 4px;");
             nameLabel.setMaxWidth(110);
             nameLabel.setWrapText(true);
             nameLabel.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);

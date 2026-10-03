@@ -13,26 +13,27 @@
 ## 📸 Interface Showcase
 
 ```
-+---------------------------------------------------------------------------------------------------------+
-| [🛡️ ResQMesh]                                      [ 5 Active Nodes ] [ 3 Mesh Links ] [ 100% Delivery ] |
-+-----------------------------------+---------------------------------------------------------------------+
-| NAVIGATION                        | 🗺️ INTERACTIVE MESH TOPOLOGY CANVAS                                 |
-| • 🗺️ Topology View                 |                                                                     |
-| • 📋 Telemetry Table              |         [ 📱 Alice's Phone (#1 SENDER) ]                            |
-| • 🚀 Dispatch Alert               |                    │ (glow)                                         |
-| • 📜 Terminal Logs                |         [ 📱 Bob's Phone (#2 HOP) ]                                 |
-|                                   |                    │ (glow)                                         |
-| CONFIGURATION & ACTIONS           |         [ 🛡️ Security Post (#3 HOP) ]       [ 📱 Charlie (OFFLINE) ] |
-| • 💾 Save Network (JSON)          |                    │ (glow)                                         |
-| • 📂 Load Network (JSON)          |         [ 🏥 Medical Center (#4 RECIPIENT) ]                        |
-| • ✨ New Simulation               |                                                                     |
-|                                   |  [ Top-Right HUD Inspector: Live Device Telemetry & Battery ]        |
-+-----------------------------------+---------------------------------------------------------------------+
-| QUICK NODE CONTROLS               | 🚀 EMERGENCY DISPATCH & REAL-TIME PROPAGATION                       |
-| • Add Student / Security / Medical| Sender: Alice's Phone ──▶ Target: Medical Center [ Priority: HIGH ] |
-| • Connect Devices (Establish Link)| Payload: "Distress alert: Emergency triage required in Sector 2"    |
-| • Toggle Online/Offline / Recharge| Result: ✔ DELIVERED (3 HOPS)  [ ⚡ -2.0% battery deducted per hop ] |
-+-----------------------------------+---------------------------------------------------------------------+
++---------------------------------------------------------------------------------------------------------------+
+| [🛡️ ResQMesh]                                            [ 5 Active Nodes ] [ 3 Mesh Links ] [ 100% Delivery ]|
++---------------------+-----------------------------------------------------------------------------------------+
+| NAVIGATION          | 📊 DASHBOARD / 🗺️ NETWORK & DEVICES / 🚨 EMERGENCY DISPATCH / 📜 ACTIVITY HISTORY       |
+| • 📊 Dashboard      | +-------------------------------------------------------------------------------------+ |
+| • 🗺️ Network & Nodes| | 📍 GUIDED WORKFLOW:  [1. Add Devices] ──▶ [2. Connect Mesh] ──▶ [3. Dispatch Alert] | |
+| • 🚨 Dispatch Alert | +-------------------------------------------------------------------------------------+ |
+| • 📜 Audit History  |                                                                                         |
+|                     | 🗺️ INTERACTIVE MESH TOPOLOGY & NODE INSPECTOR                                           |
+| ACTIONS             |         [ 📱 Alice's Phone (#1 SENDER) ]                                                |
+| • ✨ New Simulation |                    │ (glow)                                                             |
+| • 💾 Save (JSON)    |         [ 📱 Bob's Phone (#2 HOP) ]                                                     |
+| • 📂 Load (JSON)    |                    │ (glow)                                                             |
+| • ↺ Reset Sample    |         [ 🛡️ Security Post (#3 HOP) ]           [ 📱 Charlie (OFFLINE) ]              |
+| • ✕ Clear Graph     |                    │ (glow)                                                             |
+|                     |         [ 🏥 Medical Center (#4 RECIPIENT) ]                                            |
+| SYSTEM TELEMETRY    |                                                                                         |
+| • Active: 4 / 5     |  [ Top-Right HUD Inspector: Telemetry & Battery ]  [ Bottom HUD: Replay & Speed Controls]|
+| • Routing: BFS      | +-------------------------------------------------------------------------------------+ |
+| • Drain: -2.0%/hop  | | 🚀 EMERGENCY OUTCOME: ✔ DELIVERED (3 HOPS)  [ 🎬 Replay ]  [ 🔍 Technical Details ] | |
++---------------------+-----------------------------------------------------------------------------------------+
 ```
 
 ---
