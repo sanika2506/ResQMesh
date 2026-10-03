@@ -104,7 +104,15 @@ ResQMesh/
    - A companion entry class that calls `App.main(args)`.
    - Useful when executing directly from IDEs without module-path VM flags.
 
-6. **`.gitignore`**:
+6. **`src/test/java/com/resqmesh/`**:
+   - Comprehensive unit and automated integration test suite (33 tests):
+     - `EmergencyDeliveryIntegrationTest`: End-to-end tests for message delivery, BFS shortest path, battery deductions, counters, activity logs, and edge cases (sender/recipient/intermediate offline, direct link, multi-path selection).
+     - `NetworkTopologyVisualTest`: Automated visual tests for `NetworkTopologyPane`, node inspector HUD, online/offline styles, and BFS route illumination.
+     - `ShortestPathStrategyTest`: Core BFS pathfinding and forwarding constraints.
+     - `SimulationEngineTest`: Delivery rules and status transitions.
+     - `NetworkGraphTest` & `DeviceModelTest`: Graph structure and device hierarchy.
+
+7. **`.gitignore`**:
    - Keeps git tracking clean by ignoring Maven output directories (`target/`) and IDE metadata files (`.idea`, `.vscode`, etc.).
 
 ---

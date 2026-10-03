@@ -171,7 +171,11 @@ public class NetworkTopologyPane extends StackPane {
         }
 
         if (activeRoute != null && !activeRoute.isEmpty()) {
-            highlightRoute(activeRoute);
+            if (graph.getAllDevices().containsAll(activeRoute)) {
+                highlightRoute(activeRoute);
+            } else {
+                clearRouteHighlight();
+            }
         }
     }
 
@@ -179,7 +183,7 @@ public class NetworkTopologyPane extends StackPane {
      * Highlights the discovered BFS route on nodes and links.
      */
     public void highlightRoute(List<CommunicationDevice> route) {
-        this.activeRoute = (route != null) ? route : Collections.emptyList();
+        this.activeRoute = (route != null) ? new ArrayList<>(route) : Collections.emptyList();
 
         // 1. Reset all links to default
         for (LinkVisual lv : linkVisuals) {
@@ -223,6 +227,68 @@ public class NetworkTopologyPane extends StackPane {
         for (NodeVisual nv : deviceNodeMap.values()) {
             nv.setRouteHopIndex(-1);
         }
+    }
+
+    public List<CommunicationDevice> getActiveRoute() {
+        return Collections.unmodifiableList(activeRoute);
+    }
+
+    public CommunicationDevice getSelectedDevice() {
+        return selectedDevice;
+    }
+
+    public boolean isLinkHighlighted(CommunicationDevice a, CommunicationDevice b) {
+        for (LinkVisual lv : linkVisuals) {
+            if (lv.connects(a, b)) {
+                return lv.isHighlighted();
+            }
+        }
+        return false;
+    }
+
+    public int getNodeHopIndex(CommunicationDevice dev) {
+        NodeVisual nv = deviceNodeMap.get(dev);
+        return (nv != null) ? nv.getRouteHopIndex() : -1;
+    }
+
+    public NodeVisual getNodeVisual(CommunicationDevice dev) {
+        return deviceNodeMap.get(dev);
+    }
+
+    public List<LinkVisual> getLinkVisuals() {
+        return Collections.unmodifiableList(linkVisuals);
+    }
+
+    public Map<CommunicationDevice, NodeVisual> getDeviceNodeMap() {
+        return Collections.unmodifiableMap(deviceNodeMap);
+    }
+
+    public boolean isInspectorVisible() {
+        return inspectorCard != null && inspectorCard.isVisible();
+    }
+
+    public String getInspectorTitle() {
+        return inspectorTitleLabel != null ? inspectorTitleLabel.getText() : "";
+    }
+
+    public String getInspectorId() {
+        return inspectorIdLabel != null ? inspectorIdLabel.getText() : "";
+    }
+
+    public String getInspectorStatus() {
+        return inspectorStatusLabel != null ? inspectorStatusLabel.getText() : "";
+    }
+
+    public String getInspectorBattery() {
+        return inspectorBatteryLabel != null ? inspectorBatteryLabel.getText() : "";
+    }
+
+    public String getInspectorType() {
+        return inspectorTypeLabel != null ? inspectorTypeLabel.getText() : "";
+    }
+
+    public String getInspectorPeers() {
+        return inspectorPeersLabel != null ? inspectorPeersLabel.getText() : "";
     }
 
     /**
@@ -415,6 +481,8 @@ public class NetworkTopologyPane extends StackPane {
         private final Label hopBadge;
 
         private boolean dragged = false;
+        private int routeHopIndex = -1;
+        private boolean selected = false;
 
         public NodeVisual(CommunicationDevice device, double x, double y) {
             this.device = device;
@@ -464,26 +532,30 @@ public class NetworkTopologyPane extends StackPane {
                 baseCircle.setFill(Color.web("#3f1218"));
                 baseCircle.setStroke(Color.web("#e11d48"));
                 baseCircle.setStrokeWidth(2.0);
+                baseCircle.getStrokeDashArray().setAll(4.0, 4.0);
                 setOpacity(0.70);
             } else {
                 baseCircle.setFill(Color.web("#0e223d"));
                 baseCircle.setStroke(Color.web("#10b981"));
                 baseCircle.setStrokeWidth(2.0);
+                baseCircle.getStrokeDashArray().clear();
                 setOpacity(1.0);
             }
         }
 
         public void setSelected(boolean selected) {
+            this.selected = selected;
             if (selected) {
                 haloCircle.setStroke(Color.web("#38bdf8"));
                 haloCircle.setEffect(new DropShadow(14, Color.web("#06b6d4")));
-            } else if (!hopBadge.isVisible()) {
+            } else if (routeHopIndex <= 0) {
                 haloCircle.setStroke(Color.TRANSPARENT);
                 haloCircle.setEffect(null);
             }
         }
 
         public void setRouteHopIndex(int hopIndex) {
+            this.routeHopIndex = hopIndex;
             if (hopIndex > 0) {
                 hopBadge.setText("#" + hopIndex);
                 hopBadge.setVisible(true);
@@ -491,8 +563,13 @@ public class NetworkTopologyPane extends StackPane {
                 haloCircle.setEffect(new DropShadow(16, Color.web("#22d3ee")));
             } else {
                 hopBadge.setVisible(false);
-                haloCircle.setStroke(Color.TRANSPARENT);
-                haloCircle.setEffect(null);
+                if (selected) {
+                    haloCircle.setStroke(Color.web("#38bdf8"));
+                    haloCircle.setEffect(new DropShadow(14, Color.web("#06b6d4")));
+                } else {
+                    haloCircle.setStroke(Color.TRANSPARENT);
+                    haloCircle.setEffect(null);
+                }
             }
         }
 
@@ -512,6 +589,15 @@ public class NetworkTopologyPane extends StackPane {
 
         public boolean isDragged() { return dragged; }
         public void setDragged(boolean dragged) { this.dragged = dragged; }
+
+        public int getRouteHopIndex() { return routeHopIndex; }
+        public boolean isSelected() { return selected; }
+        public CommunicationDevice getDevice() { return device; }
+        public Circle getBaseCircle() { return baseCircle; }
+        public Circle getHaloCircle() { return haloCircle; }
+        public Label getHopBadge() { return hopBadge; }
+        public Label getNameLabel() { return nameLabel; }
+        public Label getIconLabel() { return iconLabel; }
     }
 
     // --------------------------------------------------------------------------
@@ -521,6 +607,7 @@ public class NetworkTopologyPane extends StackPane {
         private final CommunicationDevice devA;
         private final CommunicationDevice devB;
         private final Line line;
+        private boolean highlighted = false;
 
         public LinkVisual(CommunicationDevice devA, CommunicationDevice devB, NodeVisual visA, NodeVisual visB) {
             this.devA = devA;
@@ -542,15 +629,27 @@ public class NetworkTopologyPane extends StackPane {
         }
 
         public void setHighlighted(boolean highlighted) {
+            this.highlighted = highlighted;
             if (highlighted) {
                 line.setStroke(Color.web("#22d3ee"));
                 line.setStrokeWidth(3.5);
+                line.getStrokeDashArray().clear();
                 line.setEffect(new DropShadow(10, Color.web("#06b6d4")));
+            } else if (!devA.isAvailable() || !devB.isAvailable()) {
+                line.setStroke(Color.web("#2d1822"));
+                line.setStrokeWidth(1.2);
+                line.getStrokeDashArray().setAll(4.0, 4.0);
+                line.setEffect(null);
             } else {
                 line.setStroke(Color.web("#1e2d47"));
                 line.setStrokeWidth(1.8);
+                line.getStrokeDashArray().clear();
                 line.setEffect(null);
             }
         }
+
+        public boolean isHighlighted() { return highlighted; }
+        public CommunicationDevice getDevA() { return devA; }
+        public CommunicationDevice getDevB() { return devB; }
     }
 }

@@ -741,6 +741,11 @@ public class App extends Application {
         String msgId = "MSG-" + (messageCounter++);
         totalMessagesDispatched++;
 
+        // Reset previous route visualization before dispatching new simulation
+        if (topologyPane != null) {
+            topologyPane.clearRouteHighlight();
+        }
+
         EmergencyMessage message = new EmergencyMessage(msgId, sender, recipient, content.trim(), priority);
         log("DISPATCH", String.format("[%s] Initiated from '%s' to '%s' | Priority: %s", msgId, sender.getName(), recipient.getName(), priority));
 
@@ -755,7 +760,9 @@ public class App extends Application {
             resultBadge.setStyle("-fx-background-color: #064e3b; -fx-text-fill: #34d399; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px; -fx-border-color: #059669; -fx-border-radius: 4px;");
 
             renderHopRoute(result.route());
-            topologyPane.highlightRoute(result.route());
+            if (topologyPane != null) {
+                topologyPane.highlightRoute(result.route());
+            }
             resultExplanationLabel.setText(result.explanation() + "\n⚡ Impact: -2.0% battery deducted from all nodes along the transmission path.");
 
             String routeStr = result.route().stream().map(CommunicationDevice::getName).collect(Collectors.joining(" -> "));
@@ -765,7 +772,9 @@ public class App extends Application {
             resultBadge.setStyle("-fx-background-color: #450a0a; -fx-text-fill: #f87171; -fx-font-size: 11px; -fx-font-weight: 800; -fx-padding: 4 10; -fx-background-radius: 4px; -fx-border-color: #dc2626; -fx-border-radius: 4px;");
 
             renderHopRoute(result.route());
-            topologyPane.highlightRoute(result.route());
+            if (topologyPane != null) {
+                topologyPane.clearRouteHighlight();
+            }
             resultExplanationLabel.setText(result.explanation() + "\n💡 Diagnostic: Verify if intermediate nodes are offline, depleted of battery, or restricted from forwarding this priority.");
 
             log("FAILED", String.format("[%s] Delivery failed. Reason: %s", msgId, result.explanation()));
