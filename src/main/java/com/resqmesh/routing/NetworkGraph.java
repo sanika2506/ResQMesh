@@ -102,6 +102,17 @@ public class NetworkGraph {
     }
 
     /**
+     * Checks whether a bidirectional connection exists between deviceA and deviceB.
+     *
+     * @param deviceA the first device
+     * @param deviceB the second device
+     * @return true if both devices are directly connected; false otherwise
+     */
+    public boolean areConnected(CommunicationDevice deviceA, CommunicationDevice deviceB) {
+        return hasConnection(deviceA, deviceB) && hasConnection(deviceB, deviceA);
+    }
+
+    /**
      * Retrieves an unmodifiable list of outgoing communication links from the specified device.
      *
      * @param device the source device
@@ -206,6 +217,105 @@ public class NetworkGraph {
         }
 
         return removedA || removedB;
+    }
+
+    /**
+     * Removes a device node and all its incoming and outgoing links from the graph.
+     *
+     * @param device the device to remove
+     * @return true if device was found and removed; false otherwise
+     */
+    public boolean removeDevice(CommunicationDevice device) {
+        if (device == null || !adjacencyList.containsKey(device)) {
+            return false;
+        }
+
+        // 1. Remove device and its outgoing links
+        adjacencyList.remove(device);
+
+        // 2. Remove all incoming links from remaining devices
+        for (List<CommunicationLink> links : adjacencyList.values()) {
+            links.removeIf(link -> link.getDestination().equals(device));
+        }
+
+        return true;
+    }
+
+    /**
+     * Removes a device by its unique ID.
+     *
+     * @param deviceId the ID of the device to remove
+     * @return true if device was found and removed; false otherwise
+     */
+    public boolean removeDeviceById(String deviceId) {
+        CommunicationDevice device = getDeviceById(deviceId);
+        return device != null && removeDevice(device);
+    }
+
+    /**
+     * Updates the unique ID of an existing device in the graph, ensuring map key consistency.
+     *
+     * @param device the device to update
+     * @param newId  the new unique ID
+     * @return true if updated successfully; false if new ID is duplicate or invalid
+     * @throws IllegalArgumentException if device or newId is null/blank
+     */
+    public boolean updateDeviceId(CommunicationDevice device, String newId) {
+        if (device == null) {
+            throw new IllegalArgumentException("Device cannot be null.");
+        }
+        if (newId == null || newId.trim().isEmpty()) {
+            throw new IllegalArgumentException("New device ID cannot be null or empty.");
+        }
+        newId = newId.trim();
+
+        if (device.getId().equalsIgnoreCase(newId)) {
+            return true; // No change needed
+        }
+
+        if (getDeviceById(newId) != null) {
+            return false; // Duplicate ID exists
+        }
+
+        // Must re-key in adjacencyList since hashCode/equals depend on ID
+        List<CommunicationLink> outgoing = adjacencyList.remove(device);
+        if (outgoing == null) {
+            return false; // Device not in graph
+        }
+
+        device.setId(newId);
+        adjacencyList.put(device, outgoing);
+        return true;
+    }
+
+    /**
+     * Retrieves the direct connected neighbors of a device.
+     *
+     * @param device the device to query
+     * @return unmodifiable list of connected devices
+     */
+    public List<CommunicationDevice> getNeighbors(CommunicationDevice device) {
+        if (device == null || !adjacencyList.containsKey(device)) {
+            return Collections.emptyList();
+        }
+        List<CommunicationDevice> neighbors = new ArrayList<>();
+        for (CommunicationLink link : adjacencyList.get(device)) {
+            neighbors.add(link.getDestination());
+        }
+        return Collections.unmodifiableList(neighbors);
+    }
+
+    /**
+     * Returns the count of connected neighbors for the specified device.
+     *
+     * @param device the device to query
+     * @return number of connected neighbors
+     */
+    public int getConnectionCount(CommunicationDevice device) {
+        if (device == null || !adjacencyList.containsKey(device)) {
+            return 0;
+        }
+        return adjacencyList.get(device).size();
     }
 
     /**

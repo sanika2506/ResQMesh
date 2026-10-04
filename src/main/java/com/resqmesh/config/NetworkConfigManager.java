@@ -1,8 +1,6 @@
 package com.resqmesh.config;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonSyntaxException;
+import com.google.gson.*;
 import com.resqmesh.model.*;
 import com.resqmesh.routing.NetworkGraph;
 
@@ -120,19 +118,35 @@ public class NetworkConfigManager {
             throw new ConfigurationException("Configuration JSON content is empty.");
         }
 
+        JsonElement rootElement;
+        try {
+            rootElement = JsonParser.parseString(json);
+        } catch (JsonSyntaxException e) {
+            throw new ConfigurationException("Malformed JSON syntax: " + e.getMessage(), e);
+        }
+
+        if (rootElement == null || !rootElement.isJsonObject()) {
+            throw new ConfigurationException("Failed to parse configuration: root must be a JSON object.");
+        }
+
+        JsonObject rootObj = rootElement.getAsJsonObject();
+        if (!rootObj.has("devices")) {
+            throw new ConfigurationException("Configuration validation failed: 'devices' array is missing from JSON.");
+        }
+
+        if (!rootObj.get("devices").isJsonArray()) {
+            throw new ConfigurationException("Configuration validation failed: 'devices' must be a JSON array.");
+        }
+
         NetworkConfigDTO dto;
         try {
-            dto = GSON.fromJson(json, NetworkConfigDTO.class);
+            dto = GSON.fromJson(rootElement, NetworkConfigDTO.class);
         } catch (JsonSyntaxException e) {
             throw new ConfigurationException("Malformed JSON syntax: " + e.getMessage(), e);
         }
 
         if (dto == null) {
             throw new ConfigurationException("Failed to parse configuration: root object is null.");
-        }
-
-        if (dto.getDevices() == null || dto.getDevices().isEmpty()) {
-            throw new ConfigurationException("Configuration validation failed: no devices defined in 'devices' array.");
         }
 
         // Validate devices
@@ -273,6 +287,9 @@ public class NetworkConfigManager {
         }
 
         String json = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        if (json.trim().isEmpty()) {
+            throw new ConfigurationException("Configuration file is empty: " + file.getName());
+        }
         loadFromJson(json, targetGraph);
     }
 }

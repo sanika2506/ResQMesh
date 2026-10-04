@@ -154,4 +154,88 @@ class NetworkGraphTest {
         assertThrows(IllegalArgumentException.class, () -> graph.connect(phoneA, null));
         assertThrows(IllegalArgumentException.class, () -> graph.connect(null, phoneB));
     }
+
+    @Test
+    @DisplayName("NetworkGraph: Remove device cascades to remove all associated links")
+    void testRemoveDeviceCascadesLinks() {
+        graph.connect(phoneA, phoneB);
+        graph.connect(phoneB, security);
+        graph.connect(security, medical);
+
+        assertEquals(4, graph.getDeviceCount());
+        assertEquals(6, graph.getTotalLinkCount()); // 3 bidirectional links = 6 directed
+
+        // Remove phoneB
+        assertTrue(graph.removeDevice(phoneB));
+        assertEquals(3, graph.getDeviceCount());
+        assertFalse(graph.containsDevice(phoneB));
+        assertNull(graph.getDeviceById("DEV-2"));
+
+        // phoneA should now have 0 links, security should have only link to medical
+        assertEquals(0, graph.getConnectionCount(phoneA));
+        assertEquals(1, graph.getConnectionCount(security));
+        assertEquals(2, graph.getTotalLinkCount()); // only security <-> medical left
+        assertFalse(graph.hasConnection(phoneA, phoneB));
+        assertFalse(graph.hasConnection(security, phoneB));
+
+        // Removing non-existent device returns false
+        assertFalse(graph.removeDevice(phoneB));
+    }
+
+    @Test
+    @DisplayName("NetworkGraph: Remove device by ID string")
+    void testRemoveDeviceById() {
+        graph.addDevice(phoneA);
+        graph.addDevice(phoneB);
+
+        assertTrue(graph.removeDeviceById("DEV-1"));
+        assertEquals(1, graph.getDeviceCount());
+        assertNull(graph.getDeviceById("DEV-1"));
+
+        // Non-existent ID returns false
+        assertFalse(graph.removeDeviceById("UNKNOWN-99"));
+    }
+
+    @Test
+    @DisplayName("NetworkGraph: Update device ID maintains map integrity and detects duplicates")
+    void testUpdateDeviceId() {
+        graph.connect(phoneA, phoneB);
+
+        // Update ID of phoneA to DEV-100
+        assertTrue(graph.updateDeviceId(phoneA, "DEV-100"));
+        assertEquals("DEV-100", phoneA.getId());
+        assertEquals(phoneA, graph.getDeviceById("DEV-100"));
+        assertNull(graph.getDeviceById("DEV-1"));
+
+        // Links should still be preserved
+        assertTrue(graph.hasConnection(phoneA, phoneB));
+        assertTrue(graph.hasConnection(phoneB, phoneA));
+
+        // Attempting to change to existing ID (DEV-2) should fail
+        assertFalse(graph.updateDeviceId(phoneA, "DEV-2"));
+        assertEquals("DEV-100", phoneA.getId());
+
+        // Same ID returns true without error
+        assertTrue(graph.updateDeviceId(phoneA, "DEV-100"));
+
+        // Null or blank throws
+        assertThrows(IllegalArgumentException.class, () -> graph.updateDeviceId(phoneA, ""));
+        assertThrows(IllegalArgumentException.class, () -> graph.updateDeviceId(phoneA, null));
+    }
+
+    @Test
+    @DisplayName("NetworkGraph: Query neighbors and connection counts")
+    void testGetNeighborsAndConnectionCount() {
+        graph.connect(phoneA, phoneB);
+        graph.connect(phoneA, security);
+
+        assertEquals(2, graph.getConnectionCount(phoneA));
+        List<CommunicationDevice> neighbors = graph.getNeighbors(phoneA);
+        assertEquals(2, neighbors.size());
+        assertTrue(neighbors.contains(phoneB));
+        assertTrue(neighbors.contains(security));
+
+        assertEquals(0, graph.getConnectionCount(medical));
+        assertTrue(graph.getNeighbors(medical).isEmpty());
+    }
 }

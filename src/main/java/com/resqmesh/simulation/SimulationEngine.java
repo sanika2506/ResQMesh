@@ -23,6 +23,7 @@ public class SimulationEngine {
 
     private final NetworkGraph graph;
     private final RoutingStrategy routingStrategy;
+    private double batteryCostPerTransmission = BATTERY_COST_PER_TRANSMISSION;
 
     /**
      * Constructs a SimulationEngine with a specific graph and routing strategy.
@@ -110,9 +111,9 @@ public class SimulationEngine {
         // Step 6: Mark FORWARDING as the message traverses intermediate devices
         message.setStatus(MessageStatus.FORWARDING);
 
-        // Step 7: Simulate transmission and deduct battery (2 units per device along the route)
+        // Step 7: Simulate transmission and deduct battery per device along the route
         for (CommunicationDevice device : route) {
-            device.consumeBattery(BATTERY_COST_PER_TRANSMISSION);
+            device.consumeBattery(batteryCostPerTransmission);
         }
 
         // Step 8: Mark message as successfully DELIVERED
@@ -143,5 +144,16 @@ public class SimulationEngine {
 
     public RoutingStrategy getRoutingStrategy() {
         return routingStrategy;
+    }
+
+    public double getBatteryCostPerTransmission() {
+        return batteryCostPerTransmission;
+    }
+
+    public void setBatteryCostPerTransmission(double batteryCostPerTransmission) {
+        if (batteryCostPerTransmission < 0.0) {
+            throw new IllegalArgumentException("Battery cost per transmission cannot be negative: " + batteryCostPerTransmission);
+        }
+        this.batteryCostPerTransmission = batteryCostPerTransmission;
     }
 }

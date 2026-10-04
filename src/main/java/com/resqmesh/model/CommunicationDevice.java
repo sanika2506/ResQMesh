@@ -14,7 +14,7 @@ public abstract class CommunicationDevice {
     public static final double MAX_BATTERY = 100.0;
     public static final double MIN_BATTERY = 0.0;
 
-    private final String id;
+    private String id;
     private String name;
     private Location location;
     private double batteryLevel; // Stored as percentage: 0.0% to 100.0%
@@ -140,6 +140,13 @@ public abstract class CommunicationDevice {
         return id;
     }
 
+    public void setId(String id) {
+        if (id == null || id.trim().isEmpty()) {
+            throw new IllegalArgumentException("Device ID cannot be null or empty.");
+        }
+        this.id = id.trim();
+    }
+
     public String getName() {
         return name;
     }
@@ -164,6 +171,17 @@ public abstract class CommunicationDevice {
 
     public double getBatteryLevel() {
         return batteryLevel;
+    }
+
+    public void setBatteryLevel(double batteryLevel) {
+        this.batteryLevel = Math.max(MIN_BATTERY, Math.min(MAX_BATTERY, batteryLevel));
+        if (this.batteryLevel <= MIN_BATTERY) {
+            this.status = DeviceStatus.OFFLINE;
+        } else if (this.batteryLevel <= LOW_BATTERY_THRESHOLD && this.status == DeviceStatus.ACTIVE) {
+            this.status = DeviceStatus.LOW_BATTERY;
+        } else if (this.batteryLevel > LOW_BATTERY_THRESHOLD && this.status == DeviceStatus.LOW_BATTERY) {
+            this.status = DeviceStatus.ACTIVE;
+        }
     }
 
     public DeviceStatus getStatus() {

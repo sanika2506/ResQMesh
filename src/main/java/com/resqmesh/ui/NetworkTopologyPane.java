@@ -54,11 +54,13 @@ public class NetworkTopologyPane extends StackPane {
     private final Pane nodeLayer;
     private final Pane replayLayer;
     private final VBox inspectorCard;
+    private final VBox emptyStateBox;
 
     // Node and Link tracking
     private final Map<CommunicationDevice, NodeVisual> deviceNodeMap = new HashMap<>();
     private final List<LinkVisual> linkVisuals = new ArrayList<>();
     private final Map<CommunicationDevice, Point2D> manualPositions = new HashMap<>();
+    private final Set<CommunicationDevice> draggedDevices = new HashSet<>();
 
     // State
     private CommunicationDevice selectedDevice;
@@ -131,12 +133,25 @@ public class NetworkTopologyPane extends StackPane {
         StackPane.setAlignment(legendBox, Pos.TOP_LEFT);
         StackPane.setMargin(legendBox, new Insets(12));
 
+        // Empty State Placeholder (centered when graph has 0 devices)
+        emptyStateBox = new VBox(8);
+        emptyStateBox.setAlignment(Pos.CENTER);
+        emptyStateBox.setMouseTransparent(true);
+        Label emptyIcon = new Label("📡");
+        emptyIcon.setStyle("-fx-font-size: 34px;");
+        Label emptyTitle = new Label("No Devices in Network Mesh");
+        emptyTitle.setStyle("-fx-font-size: 14px; -fx-font-weight: 800; -fx-text-fill: #94a3b8;");
+        Label emptySub = new Label("Register nodes below in 'Add Virtual Device' or click '↺ Reset Sample Mesh' in the toolbar.");
+        emptySub.setStyle("-fx-font-size: 11px; -fx-text-fill: #64748b;");
+        emptyStateBox.getChildren().addAll(emptyIcon, emptyTitle, emptySub);
+        emptyStateBox.setVisible(false);
+
         // Replay HUD Controls (bottom-center overlay)
         replayBar = createReplayBar();
         StackPane.setAlignment(replayBar, Pos.BOTTOM_CENTER);
         StackPane.setMargin(replayBar, new Insets(12));
 
-        getChildren().addAll(canvasPane, legendBox, inspectorCard, replayBar);
+        getChildren().addAll(canvasPane, emptyStateBox, legendBox, inspectorCard, replayBar);
 
         // Reposition nodes smoothly when pane resizes
         widthProperty().addListener((obs, oldW, newW) -> relayoutNodes());
@@ -145,6 +160,10 @@ public class NetworkTopologyPane extends StackPane {
 
     public void setOnDeviceSelected(Consumer<CommunicationDevice> listener) {
         this.deviceSelectionListener = listener;
+    }
+
+    public boolean isEmptyStateVisible() {
+        return emptyStateBox != null && emptyStateBox.isVisible();
     }
 
     /**
@@ -159,11 +178,15 @@ public class NetworkTopologyPane extends StackPane {
         replayLayer.getChildren().add(messageIndicator);
 
         List<CommunicationDevice> devices = new ArrayList<>(graph.getAllDevices());
+        draggedDevices.retainAll(devices);
+        manualPositions.keySet().retainAll(draggedDevices);
         if (devices.isEmpty()) {
+            emptyStateBox.setVisible(true);
             inspectorCard.setVisible(false);
             messageIndicator.setVisible(false);
             return;
         }
+        emptyStateBox.setVisible(false);
 
         // 1. Calculate positions for devices
         calculateInitialPositions(devices);
@@ -680,9 +703,11 @@ public class NetworkTopologyPane extends StackPane {
         for (int i = 0; i < count; i++) {
             CommunicationDevice dev = devices.get(i);
             if (!manualPositions.containsKey(dev)) {
+                double rX = (count > 6 && (i % 2 == 1)) ? radiusX * 0.65 : radiusX;
+                double rY = (count > 6 && (i % 2 == 1)) ? radiusY * 0.65 : radiusY;
                 double angle = (2.0 * Math.PI * i) / count - (Math.PI / 2.0);
-                double x = centerX + radiusX * Math.cos(angle);
-                double y = centerY + radiusY * Math.sin(angle);
+                double x = centerX + rX * Math.cos(angle);
+                double y = centerY + rY * Math.sin(angle);
                 manualPositions.put(dev, new Point2D(x, y));
             }
         }
@@ -705,10 +730,12 @@ public class NetworkTopologyPane extends StackPane {
             CommunicationDevice dev = devices.get(i);
             NodeVisual visual = deviceNodeMap.get(dev);
 
-            if (visual != null && !visual.isDragged()) {
+            if (visual != null && !visual.isDragged() && !draggedDevices.contains(dev)) {
+                double rX = (count > 6 && (i % 2 == 1)) ? radiusX * 0.65 : radiusX;
+                double rY = (count > 6 && (i % 2 == 1)) ? radiusY * 0.65 : radiusY;
                 double angle = (2.0 * Math.PI * i) / count - (Math.PI / 2.0);
-                double x = centerX + radiusX * Math.cos(angle);
-                double y = centerY + radiusY * Math.sin(angle);
+                double x = centerX + rX * Math.cos(angle);
+                double y = centerY + rY * Math.sin(angle);
                 visual.setX(x);
                 visual.setY(y);
                 manualPositions.put(dev, new Point2D(x, y));
@@ -729,11 +756,16 @@ public class NetworkTopologyPane extends StackPane {
         });
 
         visual.setOnMouseDragged(e -> {
+            draggedDevices.add(dev);
             double newX = Math.max(40, Math.min(getWidth() - 40, e.getSceneX() + dragDelta.x));
             double newY = Math.max(40, Math.min(getHeight() - 40, e.getSceneY() + dragDelta.y));
             visual.setX(newX);
             visual.setY(newY);
             manualPositions.put(dev, new Point2D(newX, newY));
+            if (dev.getLocation() != null) {
+                dev.getLocation().setX(newX);
+                dev.getLocation().setY(newY);
+            }
         });
 
         visual.setOnMouseReleased(e -> visual.setDragged(false));
@@ -884,6 +916,7 @@ public class NetworkTopologyPane extends StackPane {
             nameLabel.setStyle("-fx-text-fill: #f1f5f9; -fx-font-size: 11px; -fx-font-weight: 600; -fx-background-color: rgba(7, 11, 22, 0.85); -fx-background-radius: 4px; -fx-padding: 1px 6px; -fx-border-color: rgba(30, 58, 95, 0.45); -fx-border-radius: 4px;");
             nameLabel.setMaxWidth(110);
             nameLabel.setWrapText(true);
+            nameLabel.setTextOverrun(javafx.scene.control.OverrunStyle.ELLIPSIS);
             nameLabel.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
             nameLabel.setAlignment(Pos.CENTER);
 

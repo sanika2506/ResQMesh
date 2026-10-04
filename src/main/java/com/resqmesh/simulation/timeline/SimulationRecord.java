@@ -1,10 +1,12 @@
 package com.resqmesh.simulation.timeline;
 
+import com.resqmesh.model.CommunicationDevice;
 import com.resqmesh.model.EmergencyMessage;
 import com.resqmesh.simulation.SimulationResult;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.stream.Collectors;
 
 /**
  * Historical snapshot of a completed simulation dispatch session.
@@ -58,6 +60,52 @@ public class SimulationRecord {
 
     public int getHopCount() {
         return Math.max(0, result.getRoute().size() - 1);
+    }
+
+    public String getSenderName() {
+        return (message != null && message.getSender() != null) ? message.getSender().getName() : "Unknown";
+    }
+
+    public String getRecipientName() {
+        return (message != null && message.getRecipient() != null) ? message.getRecipient().getName() : "Unknown";
+    }
+
+    public String getMessageContent() {
+        return (message != null && message.getContent() != null) ? message.getContent() : "";
+    }
+
+    public String getPriorityName() {
+        return (message != null && message.getPriority() != null) ? message.getPriority().name() : "NORMAL";
+    }
+
+    public SimulationResult.DeliveryOutcome getOutcome() {
+        if (result != null) {
+            return result.getOutcome();
+        }
+        return isDelivered() ? SimulationResult.DeliveryOutcome.DELIVERED : SimulationResult.DeliveryOutcome.FAILED;
+    }
+
+    public String getStatusDisplay() {
+        SimulationResult.DeliveryOutcome outcome = getOutcome();
+        if (outcome == SimulationResult.DeliveryOutcome.DELIVERED) {
+            return "Delivered";
+        } else if (outcome == SimulationResult.DeliveryOutcome.NO_ROUTE_FOUND) {
+            return "No Route Found";
+        } else {
+            return "Failed";
+        }
+    }
+
+    public String getRoutePath() {
+        if (result != null && result.getRoute() != null && !result.getRoute().isEmpty()) {
+            return result.getRoute().stream()
+                    .map(CommunicationDevice::getName)
+                    .collect(Collectors.joining(" ──▶ "));
+        }
+        if (isDelivered()) {
+            return "Direct Link";
+        }
+        return "None (No route)";
     }
 
     public String getSummary() {

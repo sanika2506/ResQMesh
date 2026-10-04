@@ -281,4 +281,106 @@ public class NetworkConfigManagerTest {
         assertTrue(result.delivered(), "Message across sample mesh must succeed");
         assertEquals(4, result.route().size(), "Shortest path should have 4 devices (3 hops)");
     }
+
+    @Test
+    @DisplayName("Empty Network: Export and reload of an empty network clears state without error")
+    void testSaveAndLoadEmptyNetwork(@TempDir Path tempDir) throws Exception {
+        NetworkGraph emptyGraph = new NetworkGraph();
+        File file = tempDir.resolve("empty_mesh.json").toFile();
+
+        NetworkConfigManager.saveToFile(emptyGraph, file, "Empty Mesh");
+        assertTrue(file.exists() && file.length() > 0);
+
+        // Prepopulate a graph with existing nodes
+        NetworkGraph targetGraph = new NetworkGraph();
+        targetGraph.addDevice(new StudentPhone("TEMP-1", "Temp Phone", new Location(0, 0), 100.0));
+        assertEquals(1, targetGraph.getDeviceCount());
+
+        // Load empty mesh
+        NetworkConfigManager.loadFromFile(file, targetGraph);
+        assertEquals(0, targetGraph.getDeviceCount(), "Restoring empty network must clear all prior devices");
+        assertEquals(0, targetGraph.getTotalLinkCount(), "Restoring empty network must have 0 links");
+    }
+
+    @Test
+    @DisplayName("Validation: Missing 'devices' key in JSON throws ConfigurationException")
+    void testValidationMissingDevicesKey() {
+        String jsonWithoutDevices = "{\n  \"name\": \"No Devices Key\"\n}";
+
+        ConfigurationException ex = assertThrows(ConfigurationException.class, () ->
+                NetworkConfigManager.loadFromJson(jsonWithoutDevices, new NetworkGraph()));
+        assertTrue(ex.getMessage().contains("'devices' array is missing"));
+    }
+
+    @Test
+    @DisplayName("Validation: Empty or blank configuration file throws ConfigurationException")
+    void testValidationEmptyFile(@TempDir Path tempDir) throws Exception {
+        File emptyFile = tempDir.resolve("blank.json").toFile();
+        java.nio.file.Files.writeString(emptyFile.toPath(), "   \n\t  ");
+
+        ConfigurationException ex = assertThrows(ConfigurationException.class, () ->
+                NetworkConfigManager.loadFromFile(emptyFile, new NetworkGraph()));
+        assertTrue(ex.getMessage().contains("empty"));
+    }
+
+    @Test
+    @DisplayName("Restoration: Device types, locations, custom batteries, and statuses are preserved")
+    void testRestoreAllDeviceTypesAndAttributes(@TempDir Path tempDir) throws Exception {
+        NetworkGraph sourceGraph = new NetworkGraph();
+        StudentPhone phone = new StudentPhone("SP-1", "Student Alice", new Location(12.5, 34.5), 72.0);
+        SecurityStation sec = new SecurityStation("SEC-9", "Gate Guard", new Location(56.0, 78.0), 99.0);
+        MedicalStation med = new MedicalStation("MED-4", "ER Clinic", new Location(90.0, 12.0), 15.0);
+        med.setStatus(DeviceStatus.LOW_BATTERY);
+
+        sourceGraph.addDevice(phone);
+        sourceGraph.addDevice(sec);
+        sourceGraph.addDevice(med);
+
+        sourceGraph.connect(phone, sec);
+        sourceGraph.connect(sec, med);
+        sourceGraph.connect(phone, med);
+
+        File file = tempDir.resolve("full_attributes.json").toFile();
+        NetworkConfigManager.saveToFile(sourceGraph, file, "Detailed Attributes Mesh");
+
+        NetworkGraph targetGraph = new NetworkGraph();
+        NetworkConfigManager.loadFromFile(file, targetGraph);
+
+        assertEquals(3, targetGraph.getDeviceCount());
+        assertEquals(6, targetGraph.getTotalLinkCount());
+
+        CommunicationDevice rPhone = targetGraph.getDeviceById("SP-1");
+        CommunicationDevice rSec = targetGraph.getDeviceById("SEC-9");
+        CommunicationDevice rMed = targetGraph.getDeviceById("MED-4");
+
+        assertNotNull(rPhone);
+        assertNotNull(rSec);
+        assertNotNull(rMed);
+
+        assertInstanceOf(StudentPhone.class, rPhone);
+        assertInstanceOf(SecurityStation.class, rSec);
+        assertInstanceOf(MedicalStation.class, rMed);
+
+        assertEquals("Student Alice", rPhone.getName());
+        assertEquals(72.0, rPhone.getBatteryLevel(), 0.01);
+        assertEquals(12.5, rPhone.getLocation().getX(), 0.01);
+        assertEquals(34.5, rPhone.getLocation().getY(), 0.01);
+        assertEquals(DeviceStatus.ACTIVE, rPhone.getStatus());
+
+        assertEquals("Gate Guard", rSec.getName());
+        assertEquals(99.0, rSec.getBatteryLevel(), 0.01);
+        assertEquals(DeviceStatus.ACTIVE, rSec.getStatus());
+
+        assertEquals("ER Clinic", rMed.getName());
+        assertEquals(15.0, rMed.getBatteryLevel(), 0.01);
+        assertEquals(DeviceStatus.LOW_BATTERY, rMed.getStatus());
+
+        // Verify all 3 bidirectional links are restored
+        assertTrue(targetGraph.hasConnection(rPhone, rSec));
+        assertTrue(targetGraph.hasConnection(rSec, rPhone));
+        assertTrue(targetGraph.hasConnection(rSec, rMed));
+        assertTrue(targetGraph.hasConnection(rMed, rSec));
+        assertTrue(targetGraph.hasConnection(rPhone, rMed));
+        assertTrue(targetGraph.hasConnection(rMed, rPhone));
+    }
 }

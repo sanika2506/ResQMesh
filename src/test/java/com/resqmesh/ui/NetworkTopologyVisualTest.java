@@ -215,4 +215,44 @@ public class NetworkTopologyVisualTest {
         assertTrue(topologyPane.getMessageIndicator().isFailureMode(), "Indicator must be in failure mode for failed delivery");
         assertTrue(topologyPane.getReplayStatusText().contains("FAILED"));
     }
+
+    @Test
+    @DisplayName("Topology: Empty state placeholder is displayed when graph has 0 devices")
+    void testEmptyStateWhenZeroDevices() {
+        assertFalse(topologyPane.isEmptyStateVisible(), "Empty state should not be visible when devices exist");
+
+        graph.clear();
+        topologyPane.refresh();
+
+        assertTrue(topologyPane.isEmptyStateVisible(), "Empty state must be visible when graph is cleared");
+        assertEquals(0, topologyPane.getDeviceNodeMap().size(), "No node visuals should exist when graph is empty");
+        assertEquals(0, topologyPane.getLinkVisuals().size(), "No link visuals should exist when graph is empty");
+        assertFalse(topologyPane.isInspectorVisible(), "Inspector card should be hidden when graph is empty");
+    }
+
+    @Test
+    @DisplayName("Topology: Multi-tier concentric layout distributes 8+ devices smoothly without overlapping coordinates")
+    void testMultiTierConcentricLayoutWhenManyDevices() {
+        // Add 5 more devices to existing 5 (total 10 devices)
+        for (int i = 4; i <= 8; i++) {
+            StudentPhone phone = new StudentPhone("DEV-P" + i, "Peer Phone " + i, new Location(20 + i * 5, 20 + i * 5), 90.0);
+            graph.addDevice(phone);
+        }
+        assertEquals(10, graph.getDeviceCount());
+
+        topologyPane.refresh();
+        assertEquals(10, topologyPane.getDeviceNodeMap().size(), "All 10 devices should have visual nodes");
+        assertFalse(topologyPane.isEmptyStateVisible());
+
+        // Verify all 10 nodes have unique positions
+        java.util.Set<String> uniqueCoords = new java.util.HashSet<>();
+        for (CommunicationDevice dev : graph.getAllDevices()) {
+            NetworkTopologyPane.NodeVisual vis = topologyPane.getNodeVisual(dev);
+            assertNotNull(vis, "Visual must exist for device: " + dev.getName());
+            String coord = String.format("%.1f,%.1f", vis.getX(), vis.getY());
+            assertFalse(uniqueCoords.contains(coord), "Node coordinates should be distinct: " + coord);
+            uniqueCoords.add(coord);
+        }
+        assertEquals(10, uniqueCoords.size());
+    }
 }
