@@ -190,7 +190,7 @@ The project includes the Maven Wrapper (`mvnw` for Linux/macOS, `mvnw.cmd` for W
 ./mvnw test
 ```
 
-### 2. Launch the JavaFX Application (GUI)
+### 2. Launch the JavaFX Application (GUI Desktop)
 ```bash
 # Windows
 .\mvnw.cmd javafx:run
@@ -199,7 +199,17 @@ The project includes the Maven Wrapper (`mvnw` for Linux/macOS, `mvnw.cmd` for W
 ./mvnw javafx:run
 ```
 
-### 3. Run the Console Demonstration (CLI)
+### 3. Launch the Web Browser Edition (Phone & Laptop)
+```bash
+# Windows
+.\mvnw.cmd compile '-Dexec.mainClass=com.resqmesh.web.ResQMeshWebServer' exec:java
+
+# Linux / macOS
+./mvnw compile -Dexec.mainClass="com.resqmesh.web.ResQMeshWebServer" exec:java
+```
+Open **`http://localhost:8080/`** in your browser.
+
+### 4. Run the Console Demonstration (CLI)
 ```bash
 # Windows
 .\mvnw.cmd compile
@@ -210,7 +220,7 @@ java -cp target/classes com.resqmesh.simulation.SimulationDemo
 java -cp target/classes com.resqmesh.simulation.SimulationDemo
 ```
 
-### 4. Package the Project into a JAR
+### 5. Package the Project into a JAR
 ```bash
 # Windows
 .\mvnw.cmd package -DskipTests
@@ -219,6 +229,7 @@ java -cp target/classes com.resqmesh.simulation.SimulationDemo
 ./mvnw package -DskipTests
 ```
 The compiled JAR is generated in `target/resqmesh-simulator-1.0-SNAPSHOT.jar`.
+
 
 ---
 
@@ -310,10 +321,14 @@ ResQMesh/
     │   │       │       ├── SimulationEventType.java
     │   │       │       ├── SimulationRecord.java
     │   │       │       └── SimulationTimeline.java
-    │   │       └── ui/
-    │   │           └── NetworkTopologyPane.java  # Visual topology canvas
+    │   │       ├── ui/
+    │   │       │   └── NetworkTopologyPane.java  # Visual topology canvas
+    │   │       └── web/
+    │   │           └── ResQMeshWebServer.java    # Embedded browser HTTP server (port 8080)
     │   └── resources/
-    │       └── style.css                     # Dark-theme application stylesheet
+    │       ├── style.css                         # Dark-theme application stylesheet
+    │       └── web/
+    │           └── index.html                    # Responsive browser UI for mobile & desktop
     └── test/
         └── java/com/resqmesh/                # 120 automated JUnit 5 tests
             ├── config/
