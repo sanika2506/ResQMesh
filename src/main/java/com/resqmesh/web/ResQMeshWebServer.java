@@ -374,6 +374,16 @@ public class ResQMeshWebServer {
 
     public static void main(String[] args) {
         int port = DEFAULT_PORT;
+
+        // Support PORT environment variable (standard in Docker and cloud containers)
+        String envPort = System.getenv("PORT");
+        if (envPort != null && !envPort.trim().isEmpty()) {
+            try {
+                port = Integer.parseInt(envPort.trim());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+
         if (args.length > 0) {
             try {
                 port = Integer.parseInt(args[0]);
