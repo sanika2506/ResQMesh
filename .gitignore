@@ -28,9 +28,18 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-### VS Code ###
+### VS Code & Extensions ###
 .vscode/
+.qodo/
+
+### Logs & Runtime Outputs ###
+*.log
+hs_err_pid*
+replay_pid*
+resqmesh-settings.json
+*.tmp
 
 ### OS files ###
 Thumbs.db
 .DS_Store
+
